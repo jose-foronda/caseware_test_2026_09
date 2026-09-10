@@ -66,11 +66,10 @@ graph TD
     EMS -->|"queries version chain"| TemplateDB
 
     %% EMS requests diff summaries
-    EMS -->|"DiffSummaryRequested event\n[ACL — translates to DS model]"| DiffEngine
+    EMS -->|"getSummary(templateId, fromVersionId, toVersionId)\n[sync call — ACL translates to DS model]"| DiffEngine
 
     %% Diff & Summary is upstream to EMS
     DiffEngine -->|"reads zip archives"| TemplateS3
-    DiffEngine -->|"SummaryGenerated event\n[OHS / PL]"| EMS
     DiffEngine <-->|"reads/writes summaries"| SummaryStore
 
     %% Practitioner interacts with Dashboard
@@ -107,7 +106,7 @@ For reads it calls `EngagementQueryService` which reads from `em_engagement_read
 S3 holds the immutable zip archives. The `tm` schema holds the queryable version index with `location_key` pointers. The Diff & Summary Engine reads zips directly from S3.
 
 **Diff & Summary is upstream to EMS.**
-Summaries are generated once per `(template_id, from_version_id, to_version_id)` UUID tuple and stored in `ds_diff_summary`. EMS requests them via an ACL, translating its internal model into the Diff & Summary contract.
+Summaries are generated once per `(template_id, from_version_id, to_version_id)` UUID tuple and stored in `ds_diff_summary`. EMS calls `DiffSummaryService.getSummary()` synchronously via an ACL, translating its internal model into the Diff & Summary contract. No events are involved in this flow.
 
 **The Dashboard is a pure downstream conformist for reads.**
 It conforms to the read model schema for queries — no translation needed. For writes (decisions) it uses an ACL to translate into EMS's contract.
