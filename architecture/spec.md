@@ -4,6 +4,26 @@ Current state of all architecture decisions and open items.
 
 ---
 
+## Progress Tracker
+
+### Part 1: Architecture & Design
+
+| Section | Status | Notes |
+| :--- | :--- | :--- |
+| High-Level Architecture | ✅ Done | context-map, ERD, communication-patterns, business-flows, glossary |
+| Implementation Plan | ✅ Done | design-document.md §2 |
+| Testing Strategy | ✅ Done | design-document.md §3 |
+| Evaluation & Observability | ✅ Done | design-document.md §4 |
+| Failure Modes & Tradeoffs | ✅ Done | design-document.md §5 |
+
+### Part 2: Targeted Implementation
+
+| Section | Status | Notes |
+| :--- | :--- | :--- |
+| Code slice | ⬜ Todo | To be decided — interfaces, contracts, correctness |
+
+---
+
 ## Deployment Model
 
 - **Modular monolith** — single deployable, single database, schema-separated by bounded context.
@@ -62,8 +82,8 @@ See [communication-patterns.md](./communication-patterns.md) for full details.
 
 | Type | Used for |
 | :--- | :--- |
-| Async event (in-process) | `TemplatePublished`, `EngagementCreated`, `EngagementOpened`, `UpdateDecisionRecorded`, `DiffSummaryRequested`, `SummaryGenerated` |
-| Sync call | Dashboard → `em` (read model queries, record decision), `em` → `tm` (version chain lookup) |
+| Async event (in-process) | `TemplatePublished`, `EngagementCreated`, `UpdateDecisionRecorded` |
+| Sync call | Dashboard → `em` (read model queries, record decision), `em` → `tm` (version chain lookup), `em` → `ds` (diff summary) |
 
 ---
 
