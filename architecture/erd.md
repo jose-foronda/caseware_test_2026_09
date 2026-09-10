@@ -126,7 +126,6 @@ erDiagram
         string   payload
         string   error_message
         string   status
-        int      retry_count
         datetime created_at
     }
 
@@ -148,4 +147,4 @@ erDiagram
 - `tenant_id` is sourced from an external identity/auth system — it appears as a correlation ID in `em` but is never owned by this system.
 - `em_engagement.status` represents coarse lifecycle state only: `ACTIVE`, `ARCHIVED`, `DELETED`. Workflow state lives inside the blob and requires rehydration.
 - `em_engagement_read_model` is a projection rebuilt from events (`EngagementCreated`, `UpdateDecisionRecorded`, `TemplatePublished`). It is never the source of truth. `update_status` is derived at read time: `UPDATES_REVIEWED` if `last_decided_version_id == latest_version_id`, else `PENDING_UPDATES`.
-- `sys_error_log` captures failures from any system operation (event handlers, LLM calls, blob reads, etc.) with `error_type` identifying the source, `source` the originating component, and `status` values: `PENDING_RETRY`, `FAILED`, `RESOLVED`. A background job retries `PENDING_RETRY` rows. Alerting monitors non-zero `FAILED` count.
+- `sys_error_log` captures failures from any system operation (event handlers, LLM calls, blob reads, etc.) with `error_type` identifying the source, `source` the originating component, and `status` values: `PENDING_RETRY`, `FAILED`, `RESOLVED`. Alerting monitors non-zero `FAILED` count.

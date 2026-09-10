@@ -32,6 +32,7 @@ Three bounded contexts, each owning its schema:
 - `tm` schema: `tm_product_template`, `tm_product_template_version`
 - `em` schema: `em_client`, `em_engagement`, `em_engagement_read_model`, `em_update_decision`
 - `ds` schema: `ds_diff_summary`
+- `sys` schema: `sys_error_log`
 
 **Stage 2 — Skeleton (Controller + Service + Repository, no logic)**
 - `tm`: `TemplateQueryService` + repository
