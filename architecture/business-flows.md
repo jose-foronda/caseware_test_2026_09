@@ -69,7 +69,7 @@ Data flow descriptions for all use cases represented in the [Context Map](./cont
 4. `DiffSummaryService` checks `ds_diff_summary` for an existing row matching `(template_id, from_version_id, to_version_id)`:
    - **Cache hit:** returns the existing narrative immediately.
    - **Cache miss:** reads both zip archives using `location_key` from `tm_product_template_version`, computes a JSON diff, generates an LLM narrative, inserts a new `ds_diff_summary` row, returns the narrative.
-5. EMS stores the `summary_id` in `em_engagement_read_model` and returns the narrative to the Dashboard.
+5. EMS returns the narrative to the Dashboard.
 6. Dashboard UI displays the narrative to the practitioner.
 
 ---
