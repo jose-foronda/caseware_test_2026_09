@@ -94,6 +94,11 @@ Gatling reports p95/p99 latency out of the box, which maps directly to the alert
 - Every event handler logs `engagementId`, `templateId`, `versionId`, `tenantId`, and processing duration.
 - Every decision records `decidedBy`, `decision`, `fromVersionId`, `targetVersionId` — already in `em_update_decision`.
 
+**APM (e.g. Datadog)**
+- Instrument the service with a Datadog APM agent to track API endpoint response times, DB query latency, and slow query detection across all schemas.
+- Dashboard query traces (`getEngagementsByTenant()`) and fan-out handler traces (`TemplatePublished`) are the primary spans to monitor.
+- DB-level metrics (query throughput, connection pool saturation, index hit rate) surfaced via Datadog's PostgreSQL integration — no custom instrumentation needed.
+
 **Alerting**
 - `sys_error_log` rows with `status = FAILED` — alert on new entries. A missed `TemplatePublished` fan-out means engagements silently show stale status.
 - `PENDING_RETRY` rows are retried by a background job. `FAILED` status requires manual intervention.
