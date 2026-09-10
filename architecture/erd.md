@@ -17,6 +17,7 @@ For the context map see [context-map.md](./context-map.md).
 | `tm` | Template Management | Templates and their versions |
 | `em` | Engagement Management | Clients, engagement blobs, read model, decisions |
 | `ds` | Diff & Summary | Diff summaries |
+| `sys` | System / Cross-cutting | Event error log |
 
 > `tenant_id` is a correlation ID sourced from an external identity/auth system — not owned by any schema.
 
@@ -112,6 +113,23 @@ erDiagram
         datetime created_at
     }
 
+    %% ─── sys (System / Cross-cutting) ────────────────────────────────
+
+    sys_error_log {
+        UUID     error_id      PK
+        string   error_type
+        string   source
+        UUID     tenant_id
+        UUID     client_id
+        UUID     engagement_id
+        UUID     template_id
+        string   payload
+        string   error_message
+        string   status
+        int      retry_count
+        datetime created_at
+    }
+
     %% ─── Relationships (within schema only) ────────────────────────────
 
     tm_product_template      ||--o{ tm_product_template_version : "has versions"
@@ -130,4 +148,4 @@ erDiagram
 - `tenant_id` is sourced from an external identity/auth system — it appears as a correlation ID in `em` but is never owned by this system.
 - `em_engagement.status` represents coarse lifecycle state only: `ACTIVE`, `ARCHIVED`, `DELETED`. Workflow state lives inside the blob and requires rehydration.
 - `em_engagement_read_model` is a projection rebuilt from events (`EngagementCreated`, `UpdateDecisionRecorded`, `TemplatePublished`). It is never the source of truth. `update_status` is derived at read time: `UPDATES_REVIEWED` if `last_decided_version_id == latest_version_id`, else `PENDING_UPDATES`.
-- `em_update_decision` is append-only — no updates or deletes. It serves as the immutable decision trail.
+- `sys_error_log` captures failures from any system operation (event handlers, LLM calls, blob reads, etc.) with `error_type` identifying the source, `source` the originating component, and `status` values: `PENDING_RETRY`, `FAILED`, `RESOLVED`. A background job retries `PENDING_RETRY` rows. Alerting monitors non-zero `FAILED` count.

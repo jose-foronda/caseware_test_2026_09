@@ -84,8 +84,8 @@ Gatling reports p95/p99 latency out of the box, which maps directly to the alert
 ## 4. Evaluation & Observability
 
 **Key metrics to instrument**
-- Read model staleness: time between `TemplatePublished` event emission and read model update completion. Alert if > 30s.
-- Decision handler lag: time between `UpdateDecisionRecorded` emission and read model update. Alert if > 10s.
+- Event handler failure rate: failed `TemplatePublished` and `UpdateDecisionRecorded` handler executions are written to `sys_error_log` with `status = PENDING_RETRY` or `FAILED`. Alert on any non-zero `FAILED` count — a failed handler means the read model is silently stale.
+- `sys_error_log` row count by status: queryable at any time for operational visibility without external tooling.
 - Diff summary cache hit rate: low hit rate signals version pair diversity or cache eviction issues.
 - `DiffSummaryService` p95 latency on cache miss (blob reads + LLM call) — expected to be slow; set user expectation via UI loading state.
 
@@ -94,7 +94,8 @@ Gatling reports p95/p99 latency out of the box, which maps directly to the alert
 - Every decision records `decidedBy`, `decision`, `fromVersionId`, `targetVersionId` — already in `em_update_decision`.
 
 **Alerting**
-- Dead-letter queue (or equivalent) for failed event handler processing — a missed `TemplatePublished` fan-out means engagements silently show stale status.
+- `sys_error_log` rows with `status = FAILED` — alert on any non-zero count. A missed `TemplatePublished` fan-out means engagements silently show stale status.
+- A background retry job processes `PENDING_RETRY` rows automatically. `FAILED` status is set only after retries are exhausted, requiring manual intervention.
 - LLM call failures in `DiffSummaryService` — fall back gracefully (return raw diff or error message), never block the decision flow.
 
 ---
@@ -103,9 +104,9 @@ Gatling reports p95/p99 latency out of the box, which maps directly to the alert
 
 | Failure | Impact | Mitigation |
 | :--- | :--- | :--- |
-| `TemplatePublished` handler fails mid-fan-out | Some engagements show stale `latest_version_id` | Idempotent handler + retry. Fan-out is a bulk update — wrap in a transaction per batch. |
+| `TemplatePublished` handler fails mid-fan-out | Some engagements show stale `latest_version_id` | Idempotent handler + retry via `sys_error_log`. Fan-out is a bulk update — wrap in a transaction per batch. |
 | `DiffSummaryService` LLM call fails | Practitioner cannot view narrative | Return raw JSON diff as fallback. Decision flow is unblocked — narrative is informational only. |
-| Read model row missing for an engagement | Dashboard shows no entry | `EngagementCreated` handler is idempotent — re-emit or backfill on detection. |
+| Read model row missing for an engagement | Dashboard shows no entry | `EngagementCreated` handler is idempotent — re-emit or backfill on detection via `sys_error_log`. |
 | Practitioner declines all versions, new version published | Status correctly flips to `PENDING_UPDATES` | Derived from `last_decided_version_id != latest_version_id` — no special handling needed. |
 | Large tenant with 100s of engagements on same template | Fan-out on `TemplatePublished` is a bulk write | Batched update with configurable page size. Acceptable given ~1/week publish frequency. |
 
