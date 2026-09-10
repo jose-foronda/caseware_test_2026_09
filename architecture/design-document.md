@@ -28,24 +28,29 @@ Three bounded contexts, each owning its schema:
 
 ## 2. Implementation Plan
 
-**Phase 1 — Read Model Foundation**
-- Add `em_engagement_read_model` table to the `em` schema.
-- Implement `TemplatePublished` event handler: fan out `latest_version_id` update to all engagements on that template.
-- Implement `EngagementCreated` event handler: insert read model row with `last_decided_version_id = current_version_id`.
-- Expose `EngagementQueryService.getEngagementsByTenant()` — reads from read model only.
+**Stage 1 — Schema & Entities**
+- `tm` schema: `tm_product_template`, `tm_product_template_version`
+- `em` schema: `em_client`, `em_engagement`, `em_engagement_read_model`, `em_update_decision`
+- `ds` schema: `ds_diff_summary`
 
-**Phase 2 — Decision Flow**
-- Implement `EngagementService.recordDecision()`: insert `em_update_decision` row, emit `UpdateDecisionRecorded`.
-- Implement `UpdateDecisionRecorded` handler: update `current_version_id` (if APPLIED) and `last_decided_version_id` on read model.
+**Stage 2 — Skeleton (Controller + Service + Repository, no logic)**
+- `tm`: `TemplateQueryService` + repository
+- `em`: `EngagementService`, `EngagementQueryService` + repositories
+- `ds`: `DiffSummaryService` + repository
+- `dashboard`: `DashboardController` wired to `em` services
 
-**Phase 3 — Diff & Summary**
-- Implement `DiffSummaryService.getSummary()`: cache-check → resolve `location_key`s via `TemplateQueryService` → read blobs → compute JSON diff → LLM narrative → cache in `ds_diff_summary`.
-- Wire `EngagementQueryService.getSummary()` as the EMS-facing ACL into DS.
+**Stage 3 — CRUDs**
+- Template + version CRUD (`tm`)
+- Client + engagement CRUD (`em`)
+- Diff summary CRUD (`ds`)
 
-**Phase 4 — Dashboard API**
-- Expose read endpoints (engagement list, version chain, diff summary) and write endpoint (record decision).
+**Stage 4 — Aggregated Flows**
+- UC-1: `TemplatePublished` handler → read model fan-out
+- UC-3: `EngagementCreated` handler → read model insert
+- UC-6: `getSummary()` with cache hit/miss logic + LLM
+- UC-7: `recordDecision()` + `UpdateDecisionRecorded` handler → read model update
 
-Each phase is independently deployable and testable. Phase 1 unblocks the dashboard immediately.
+Each stage is independently deployable and testable. Stages 1 and 2 unblock parallel frontend and backend work immediately.
 
 ---
 
