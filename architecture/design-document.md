@@ -20,6 +20,8 @@ Three bounded contexts, each owning its schema:
 
 **Diff summaries** are lazy and synchronous — generated on demand when a practitioner clicks "Compare", cached in `ds_diff_summary` keyed by `(template_id, from_version_id, to_version_id)` and shared across all engagements on the same version gap.
 
+**Stack:** Java 21 + Spring Boot 3, PostgreSQL (schema-separated), deployed as a single service on AWS (ECS + RDS). In-process async via Spring `ApplicationEventPublisher` with `@TransactionalEventListener` — handlers fire only after the originating transaction commits, preventing read model updates on rollback.
+
 > Supporting diagrams: [context-map.md](./context-map.md) · [erd.md](./erd.md) · [business-flows.md](./business-flows.md) · [communication-patterns.md](./communication-patterns.md)
 
 ---
