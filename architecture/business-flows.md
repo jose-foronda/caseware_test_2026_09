@@ -58,15 +58,22 @@ Data flow descriptions for all use cases represented in the [Context Map](./cont
 
 ---
 
-## UC-6 — Diff Summary is Generated for a Template Update
+## UC-6 — Practitioner Compares Template Versions (Diff Summary)
 
-**Trigger:** EMS detects `update_status = UPDATE_AVAILABLE` for an engagement (via UC-1 or UC-3).
+**Actor:** Practitioner (Accounting Firm User)
+**Trigger:** Practitioner clicks "Compare" on an engagement with `update_status = UPDATE_AVAILABLE`.
 
-1. EMS emits a `DiffSummaryRequested` event carrying `templateId`, `fromVersionId` (`current_version_id`), `toVersionId` (`latest_version_id`).
-2. Diff & Summary Engine checks `ds_diff_summary` for an existing row matching `(template_id, from_version_id, to_version_id)`.
-   - **Cache hit:** emits `SummaryGenerated` immediately with the existing `summary_id`.
+1. Dashboard UI calls Dashboard API with `engagementId`.
+2. Dashboard API calls `EngagementQueryService.getSummary(engagementId)` on EMS.
+3. EMS checks `em_engagement_read_model.summary_id` for this engagement.
+   - **Already computed:** returns the existing `ds_diff_summary` narrative immediately.
+   - **Not yet computed:** EMS emits a `DiffSummaryRequested` event carrying `templateId`, `fromVersionId` (`current_version_id`), `toVersionId` (`latest_version_id`), then returns a `pending` response to the Dashboard.
+4. On `pending`, Dashboard UI polls until the summary is available.
+5. Diff & Summary Engine handles `DiffSummaryRequested`:
+   - **Cache hit** (`ds_diff_summary` row exists for that tuple): emits `SummaryGenerated` immediately.
    - **Cache miss:** reads both zip archives using `location_key` from `tm_product_template_version`, computes a JSON diff, generates an LLM narrative, inserts a new `ds_diff_summary` row, then emits `SummaryGenerated`.
-3. EMS handles `SummaryGenerated` and updates `em_engagement_read_model` with the `summary_id` so the Dashboard can link to it.
+6. EMS handles `SummaryGenerated` and updates `em_engagement_read_model.summary_id`.
+7. Dashboard UI displays the narrative to the practitioner.
 
 ---
 
@@ -97,9 +104,11 @@ Practitioner ──► EMS ──► em_client
                       ──► em_engagement (blob + metadata)
                       ──► em_engagement_read_model
 
-EMS ──► DiffSummaryRequested ──► Diff Engine ──► ds_diff_summary
-                                      │
-                                      └──► SummaryGenerated ──► EMS ──► em_engagement_read_model
+Practitioner clicks "Compare" ──► Dashboard API ──► EMS
+                                                     │ (cache miss)
+                                                     └──► DiffSummaryRequested ──► Diff Engine ──► ds_diff_summary
+                                                                                        │
+                                                                                        └──► SummaryGenerated ──► EMS ──► em_engagement_read_model.summary_id
 
 Practitioner ──► Dashboard UI ──► Dashboard API ──► em_engagement_read_model (reads)
                                                └──► EMS.recordDecision ──► em_update_decision
