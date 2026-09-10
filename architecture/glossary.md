@@ -28,7 +28,7 @@ This glossary defines the ubiquitous language for the **Engagement Template Upda
 | **Cumulative Diff (JSON Diff)** | The machine-level structural difference between two template zip archives / JSON trees. | Deterministic and reliable, but too technical and raw for practitioners to read directly. |
 | **Change Summary (Human-Readable Narrative)** | A synthesized, practitioner-friendly explanation of inbound template changes, highlighting regulatory impact, new disclosures, risk changes, or deleted sections. | AI-augmented or template-generated narrative enabling practitioners to make defensible decisions without inspecting raw JSON. |
 | **Update Decision** | The explicit choice made by an authorized practitioner regarding pending template updates for an engagement: **Apply** or **Decline**. | Mandatory audit trail required for compliance defensibility. Applying template content itself is out-of-scope for this exercise. |
-| **Update Status** | The state of pending decisions for an engagement: `PENDING_UPDATES` or `UPDATES_REVIEWED`. Stored in `em_engagement_read_model.update_status`, written by EMS. `UPDATES_REVIEWED` when `last_decided_version_id == latest_version_id` (no pending action, regardless of apply or decline); `PENDING_UPDATES` otherwise. |
+| **Update Status** | A derived value for an engagement: `PENDING_UPDATES` or `UPDATES_REVIEWED`. Not stored — computed at read time as `last_decided_version_id == latest_version_id` → `UPDATES_REVIEWED`, otherwise `PENDING_UPDATES`. |
 
 ---
 
