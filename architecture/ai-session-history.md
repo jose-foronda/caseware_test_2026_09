@@ -82,14 +82,37 @@ The JSON examples and explanations were captured into a permanent project file f
   2. Engagement File structure and JSON examples
   3. The Template Update Problem made concrete — including a diff example and explanation of why the Engagement Read Model is necessary
 
----
+### Session 3 — Design Document & Refinements
 
-## Artifacts Produced
+**Artifacts produced/updated:** `design-document.md`, `erd.md`, `context-map.md`, `glossary.md`, `business-flows.md`, `communication-patterns.md`, `spec.md`, `README.md`
+
+**Key decisions made:**
+
+- `update_status` redesigned as a derived two-value field (`PENDING_UPDATES` / `UPDATES_REVIEWED`), computed at read time from `last_decided_version_id == latest_version_id`. Not stored — no drift risk. `UPDATE_DECLINED` removed as a status value.
+- `last_decided_version_id` added to `em_engagement_read_model`, replacing `last_evaluated_at`. Tracks the last committed decision (apply or decline).
+- Async event handlers made explicit: UC-3 step 4 driven by `EngagementCreated`, UC-7 steps 6-7 driven by `UpdateDecisionRecorded`.
+- Storage made agnostic: all S3 references removed. `location_key` is a storage-agnostic pointer. `BlobStore` node replaces `TemplateS3` in context map.
+- `fiscal_year int` added to `em_engagement` and `em_engagement_read_model` for filtering and reporting.
+- `sys` schema introduced with `sys_error_log` — append-only generic error table with `error_type`, `source`, nullable correlation IDs (`tenant_id`, `client_id`, `engagement_id`, `template_id`), `payload`, `error_message`, `status`, and `created_at`. `retry_count` considered and removed — kept simple.
+- Implementation plan restructured from Phase 1-4 to Stage 1-4 (Schema & Entities → Skeleton → CRUDs → Aggregated Flows), following an API-first approach.
+- Testing strategy: Gatling added for load & performance testing. Contract tests removed as redundant for a modular monolith.
+- Observability: `sys_error_log` replaces DLQ/latency metrics as the operational error store. Datadog APM added for API response times, DB query latency, and slow query detection via PostgreSQL integration.
+- Failure modes table cleaned up: removed entries that described normal expected behavior (status flip on new publish) or non-issues in a modular monolith (read model row missing, large tenant fan-out).
+- Key tradeoff added: in-process events (`@TransactionalEventListener`) vs message broker (SQS/SNS) — atomicity and simplicity vs durable delivery and built-in retry.
+- `README.md` rewritten as a recruiter-facing guide explaining how to navigate the documents.
+
 
 | File | Description |
 | :--- | :--- |
 | `architecture/glossary.md` | Updated with plain-language clarifications for EMS, Rehydration, Engagement Read Model, and Customer-Specific Engagement DB |
 | `architecture/domain-examples.md` | New file — concrete JSON examples illustrating Product Templates, Engagement Files, and the template update problem |
+| `architecture/context-map.md` | Bounded context diagram, DDD patterns, storage-agnostic BlobStore node |
+| `architecture/erd.md` | Full data model across `tm`, `em`, `ds`, `sys` schemas |
+| `architecture/business-flows.md` | Step-by-step use case walkthroughs (UC-1 through UC-7) |
+| `architecture/communication-patterns.md` | Sync vs async communication rules and event payloads |
+| `architecture/spec.md` | Progress tracker, key decisions log, open items |
+| `architecture/design-document.md` | Main deliverable — all 5 required sections |
+| `README.md` | Recruiter-facing navigation guide |
 | `architecture/ai-session-history.md` | This file |
 
 ---
