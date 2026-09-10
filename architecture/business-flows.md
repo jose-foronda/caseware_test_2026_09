@@ -52,25 +52,26 @@ Data flow descriptions for all use cases represented in the [Context Map](./cont
 **Actor:** Practitioner (Accounting Firm User)
 
 1. Practitioner opens the **Dashboard UI**.
-2. Dashboard UI queries the **Dashboard API**.
-3. Dashboard API calls `EngagementQueryService.getEngagementsByTenant(tenantId)`, which reads from `em_engagement_read_model`.
-4. Dashboard UI renders the list of engagements with their `update_status` and version gap (`current_version_id` vs `latest_version_id`).
+2. Dashboard UI calls `EngagementQueryService.getEngagementsByTenant(tenantId)`, which reads from `em_engagement_read_model`.
+3. Dashboard UI renders the list of engagements with their `update_status` and version gap (`current_version_id` vs `latest_version_id`).
+4. Practitioner clicks on an engagement with `update_status = UPDATE_AVAILABLE` to open the **Engagement Update View**.
 
 ---
 
 ## UC-6 — Practitioner Compares Template Versions (Diff Summary)
 
 **Actor:** Practitioner (Accounting Firm User)
-**Trigger:** Practitioner clicks "Compare" on an engagement with `update_status = UPDATE_AVAILABLE`.
+**Trigger:** Practitioner is in the **Engagement Update View** and clicks "Compare" on a specific version pair.
 
-1. Dashboard UI calls Dashboard API with `engagementId`.
-2. Dashboard API calls `EngagementQueryService.getSummary(engagementId)` on EMS.
+> The Engagement Update View shows all versions between `current_version_id` and `latest_version_id` (resolved via `tm_product_template_version.previous_version_id` chain). Each version pair can be compared independently.
+
+1. Engagement Update View calls the API with `templateId`, `fromVersionId`, `toVersionId` for the selected pair.
+2. API calls `EngagementQueryService.getSummary(templateId, fromVersionId, toVersionId)` on EMS.
 3. EMS calls `DiffSummaryService.getSummary(templateId, fromVersionId, toVersionId)` synchronously.
 4. `DiffSummaryService` checks `ds_diff_summary` for an existing row matching `(template_id, from_version_id, to_version_id)`:
    - **Cache hit:** returns the existing narrative immediately.
    - **Cache miss:** reads both zip archives using `location_key` from `tm_product_template_version`, computes a JSON diff, generates an LLM narrative, inserts a new `ds_diff_summary` row, returns the narrative.
-5. EMS returns the narrative to the Dashboard.
-6. Dashboard UI displays the narrative to the practitioner.
+5. Engagement Update View displays the narrative to the practitioner.
 
 ---
 
@@ -78,7 +79,7 @@ Data flow descriptions for all use cases represented in the [Context Map](./cont
 
 **Actor:** Practitioner (Accounting Firm User)
 
-1. Practitioner reviews the diff summary on the **Dashboard UI** and submits a decision (accept / decline) with an optional `reason`.
+1. Practitioner reviews the diff summary in the **Engagement Update View** and submits a decision (accept / decline) with an optional `reason`.
 2. Dashboard UI sends the decision to the **Dashboard API**.
 3. Dashboard API calls `EngagementService.recordDecision(engagementId, decision, targetVersionId, userId, reason)`.
 4. EMS inserts a new `em_update_decision` row (append-only) with `from_version_id`, `target_version_id`, `decision`, `summary_id`, `decided_by`, and `reason`.
