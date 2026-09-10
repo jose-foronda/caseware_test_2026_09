@@ -59,6 +59,7 @@ erDiagram
         UUID     tenant_id
         UUID     template_id
         string   initial_template_version
+        string   location_key
         string   status
         datetime created_at
     }
@@ -124,7 +125,7 @@ erDiagram
 
 - FK constraints are only enforced **within** the same schema. Cross-schema `template_id`, `engagement_id`, and `tenant_id` fields are correlation IDs kept consistent via domain events, not DB constraints.
 - `tenant_id` is sourced from an external identity/auth system — it appears as a correlation ID in `em`, `um`, and `um_audit_log` but is never owned by this system.
-- `em_engagement` stores the raw serialized blob — `template_id` and `initial_template_version` are the only metadata columns; all other engagement state requires rehydration.
+- `em_engagement` stores metadata columns plus a `location_key` pointing to the serialized blob in storage. All other engagement state beyond these metadata fields requires rehydration.
 - `um_engagement_read_model` is a projection rebuilt from events (`EngagementCreated`, `EngagementOpened`, `UpdateDecisionRecorded`, `TemplatePublished`). It is never the source of truth.
 - `ds_diff_summary` is keyed by `(template_id, from_version, to_version)` — generated once, shared across all engagements on the same version gap.
 - `um_audit_log` is append-only — no updates or deletes.
