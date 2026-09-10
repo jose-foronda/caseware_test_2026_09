@@ -11,7 +11,7 @@ Data flow descriptions for all use cases represented in the [Context Map](./cont
 1. Content Team uploads a new template version to the **Template Publishing Service (TPS)**.
 2. TPS writes the zip archive to storage and records a new `tm_product_template_version` row with `version`, `previous_version_id`, and `location_key`.
 3. TPS emits a `TemplatePublished` event (carrying `templateId`, `versionId`, `previousVersionId`, `locationKey`) consumed by EMS.
-4. EMS updates `em_engagement_read_model` for all engagements on that template — setting `latest_version_id` and `update_status = UPDATE_AVAILABLE` where `current_version_id != versionId`.
+4. EMS updates `em_engagement_read_model` for all engagements on that template — setting `latest_version_id = versionId` and `update_status = PENDING_UPDATES` for all engagements where `last_decided_version_id != versionId`.
 
 ---
 
@@ -31,7 +31,7 @@ Data flow descriptions for all use cases represented in the [Context Map](./cont
 1. Practitioner creates an engagement for an existing client, selecting a product template.
 2. EMS resolves the latest `version_id` for the selected template from `tm_product_template_version`.
 3. EMS creates the engagement blob, stores it in blob storage, and inserts a new `em_engagement` row with `client_id`, `tenant_id`, `template_id`, `current_version_id`, and `location_key`.
-4. EMS inserts a corresponding `em_engagement_read_model` row with `update_status = UP_TO_DATE`.
+4. EMS inserts a corresponding `em_engagement_read_model` row with `update_status = UPDATES_REVIEWED`.
 5. EMS emits an `EngagementCreated` event.
 
 ---
@@ -84,9 +84,10 @@ Data flow descriptions for all use cases represented in the [Context Map](./cont
 3. Dashboard API calls `EngagementService.recordDecision(engagementId, decision, targetVersionId, userId, reason)`.
 4. EMS inserts a new `em_update_decision` row (append-only) with `from_version_id`, `target_version_id`, `decision`, `summary_id`, `decided_by`, and `reason`.
 5. EMS emits an `UpdateDecisionRecorded` event.
-6. EMS updates `em_engagement_read_model.update_status`:
-   - `APPLIED` → `update_status = UP_TO_DATE`, `current_version_id = target_version_id`
-   - `DECLINED` → `update_status = UPDATE_DECLINED`
+6. EMS updates `em_engagement_read_model`:
+   - `APPLIED` → `current_version_id = target_version_id`, `last_decided_version_id = target_version_id`
+   - `DECLINED` → `last_decided_version_id = target_version_id`
+   - Both cases: `update_status = UPDATES_REVIEWED` if `last_decided_version_id == latest_version_id`, else `PENDING_UPDATES`
 7. If `APPLIED`, EMS also updates `em_engagement.current_version_id = target_version_id`.
 
 ---

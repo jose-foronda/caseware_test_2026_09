@@ -76,13 +76,13 @@ erDiagram
     }
 
     em_engagement_read_model {
-        UUID     engagement_id      PK
+        UUID     engagement_id           PK
         UUID     tenant_id
         UUID     template_id
         UUID     current_version_id
         UUID     latest_version_id
+        UUID     last_decided_version_id
         string   update_status
-        datetime last_evaluated_at
     }
 
     em_update_decision {
@@ -126,5 +126,5 @@ erDiagram
 - FK constraints are only enforced **within** the same schema. Cross-schema `template_id`, `version_id`, and `tenant_id` fields are correlation IDs kept consistent via domain events, not DB constraints.
 - `tenant_id` is sourced from an external identity/auth system — it appears as a correlation ID in `em` but is never owned by this system.
 - `em_engagement.status` represents coarse lifecycle state only: `ACTIVE`, `ARCHIVED`, `DELETED`. Workflow state lives inside the blob and requires rehydration.
-- `em_engagement_read_model` is a projection rebuilt from events (`EngagementCreated`, `EngagementOpened`, `UpdateDecisionRecorded`, `TemplatePublished`). It is never the source of truth.
+- `em_engagement_read_model` is a projection rebuilt from events (`EngagementCreated`, `UpdateDecisionRecorded`, `TemplatePublished`). It is never the source of truth. `update_status` values: `PENDING_UPDATES` | `UPDATES_REVIEWED`.
 - `em_update_decision` is append-only — no updates or deletes. It serves as the immutable decision trail.
