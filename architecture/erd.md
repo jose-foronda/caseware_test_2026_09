@@ -15,9 +15,8 @@ For the context map see [context-map.md](./context-map.md).
 | Schema | Bounded Context | Owns |
 | :--- | :--- | :--- |
 | `tm` | Template Management | Templates and their versions |
-| `em` | Engagement Management | Clients and engagement blobs |
-| `um` | Update Management | Read model, decisions, audit log |
-| `ds` | Diff & Summary | Diff summaries and cache |
+| `em` | Engagement Management | Clients, engagement blobs, read model, decisions |
+| `ds` | Diff & Summary | Diff summaries |
 
 > `tenant_id` is a correlation ID sourced from an external identity/auth system — not owned by any schema.
 
@@ -67,7 +66,7 @@ erDiagram
         UUID     client_id          FK
         UUID     tenant_id
         UUID     template_id
-        UUID     initial_version_id
+        UUID     current_version_id
         string   location_key
         string   status
         string   created_by
@@ -76,9 +75,7 @@ erDiagram
         datetime updated_at
     }
 
-    %% ─── um (Update Management) ─────────────────────────────────────────
-
-    um_engagement_read_model {
+    em_engagement_read_model {
         UUID     engagement_id      PK
         UUID     tenant_id
         UUID     template_id
@@ -88,7 +85,7 @@ erDiagram
         datetime last_evaluated_at
     }
 
-    um_update_decision {
+    em_update_decision {
         UUID     decision_id       PK
         UUID     engagement_id
         UUID     template_id
@@ -118,6 +115,7 @@ erDiagram
     tm_product_template      ||--o{ tm_product_template_version : "has versions"
 
     em_client                ||--o{ em_engagement               : "has engagements"
+    em_engagement            ||--o{ em_update_decision           : "has decisions"
 
 ```
 
@@ -125,8 +123,8 @@ erDiagram
 
 ## Notes
 
-- FK constraints are only enforced **within** the same schema. Cross-schema `template_id`, `engagement_id`, and `tenant_id` fields are correlation IDs kept consistent via domain events, not DB constraints.
-- `tenant_id` is sourced from an external identity/auth system — it appears as a correlation ID in `em`, `um`, and `um_audit_log` but is never owned by this system.
+- FK constraints are only enforced **within** the same schema. Cross-schema `template_id`, `version_id`, and `tenant_id` fields are correlation IDs kept consistent via domain events, not DB constraints.
+- `tenant_id` is sourced from an external identity/auth system — it appears as a correlation ID in `em` but is never owned by this system.
 - `em_engagement.status` represents coarse lifecycle state only: `ACTIVE`, `ARCHIVED`, `DELETED`. Workflow state lives inside the blob and requires rehydration.
-- `um_engagement_read_model` is a projection rebuilt from events (`EngagementCreated`, `EngagementOpened`, `UpdateDecisionRecorded`, `TemplatePublished`). It is never the source of truth.
-- `um_update_decision` is append-only — no updates or deletes. It serves as the immutable decision trail.
+- `em_engagement_read_model` is a projection rebuilt from events (`EngagementCreated`, `EngagementOpened`, `UpdateDecisionRecorded`, `TemplatePublished`). It is never the source of truth.
+- `em_update_decision` is append-only — no updates or deletes. It serves as the immutable decision trail.
