@@ -54,7 +54,7 @@ Data flow descriptions for all use cases represented in the [Context Map](./cont
 1. Practitioner opens the **Dashboard UI**.
 2. Dashboard UI calls `EngagementQueryService.getEngagementsByTenant(tenantId)`, which reads from `em_engagement_read_model`.
 3. Dashboard UI renders the list of engagements with their `update_status` and version gap (`current_version_id` vs `latest_version_id`).
-4. Practitioner clicks on an engagement with `update_status = UPDATE_AVAILABLE` to open the **Engagement Update View**.
+4. Practitioner clicks on an engagement with `update_status = PENDING_UPDATES` to open the **Engagement Update View**.
 
 ---
 
@@ -84,11 +84,11 @@ Data flow descriptions for all use cases represented in the [Context Map](./cont
 3. Dashboard API calls `EngagementService.recordDecision(engagementId, decision, targetVersionId, userId, reason)`.
 4. EMS inserts a new `em_update_decision` row (append-only) with `from_version_id`, `target_version_id`, `decision`, `summary_id`, `decided_by`, and `reason`.
 5. EMS emits an `UpdateDecisionRecorded` event.
-6. EMS updates `em_engagement_read_model`:
+6. *(async — EMS consumes `UpdateDecisionRecorded`)* EMS updates `em_engagement_read_model`:
    - `APPLIED` → `current_version_id = target_version_id`, `last_decided_version_id = target_version_id`
    - `DECLINED` → `last_decided_version_id = target_version_id`
    - Both cases: `update_status = UPDATES_REVIEWED` if `last_decided_version_id == latest_version_id`, else `PENDING_UPDATES`
-7. If `APPLIED`, EMS also updates `em_engagement.current_version_id = target_version_id`.
+7. *(async — same handler)* If `APPLIED`, EMS also updates `em_engagement.current_version_id = target_version_id`.
 
 ---
 
