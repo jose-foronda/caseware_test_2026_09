@@ -40,7 +40,6 @@ ProducerContext.SomeService  →  publishes  →  EventBus  →  ConsumerContext
 | Producer | Consumer | Pattern | Event / Method | Trigger |
 | :--- | :--- | :--- | :--- | :--- |
 | `em` | `em` | Async event | `EngagementCreated` | Practitioner creates a new engagement |
-| `em` | `em` | Async event | `EngagementOpened` | Practitioner opens an existing engagement (reconciliation) |
 | `em` | `em` | Async event | `UpdateDecisionRecorded` | Practitioner accepts or declines an update |
 | `tm` | `em` | Async event | `TemplatePublished` | Content team publishes a new template version |
 | `em` | `tm` | Sync call | `TemplateQueryService.getVersionChain(templateId, fromVersion)` | `em` needs the ordered list of versions between current and latest |
@@ -89,7 +88,6 @@ DiffSummaryService (public)
 | Event | Producer | Key Fields |
 | :--- | :--- | :--- |
 | `EngagementCreated` | `em` | `engagementId`, `tenantId`, `templateId`, `currentVersionId`, `timestamp` |
-| `EngagementOpened` | `em` | `engagementId`, `tenantId`, `currentVersionId`, `timestamp` |
 | `UpdateDecisionRecorded` | `em` | `engagementId`, `tenantId`, `decision`, `targetVersionId`, `userId`, `timestamp` |
 | `TemplatePublished` | `tm` | `templateId`, `versionId`, `previousVersionId`, `locationKey`, `timestamp` |
 | `DiffSummaryRequested` | `em` | `templateId`, `fromVersionId`, `toVersionId` |

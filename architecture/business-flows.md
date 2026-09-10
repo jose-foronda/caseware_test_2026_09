@@ -36,14 +36,12 @@ Data flow descriptions for all use cases represented in the [Context Map](./cont
 
 ---
 
-## UC-4 — Practitioner Opens an Existing Engagement (Reconciliation)
+## UC-4 — Practitioner Opens an Existing Engagement
 
 **Actor:** Practitioner (Accounting Firm User)
 
 1. Practitioner opens an engagement — EMS rehydrates the blob from `em_engagement.location_key` (~1 minute).
-2. EMS reads `current_version_id` from the rehydrated blob's manifest.
-3. EMS emits an `EngagementOpened` event carrying the rehydrated `currentVersionId`.
-4. EMS uses this as a reconciliation signal — if the rehydrated `currentVersionId` differs from `em_engagement.current_version_id`, it corrects both `em_engagement` and `em_engagement_read_model`.
+2. `em_engagement.current_version_id` is the authoritative version — no reconciliation needed.
 
 > The Dashboard never triggers rehydration. It always reads from `em_engagement_read_model` directly.
 

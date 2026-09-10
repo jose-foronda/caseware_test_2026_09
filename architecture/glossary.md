@@ -52,7 +52,6 @@ This glossary defines the ubiquitous language for the **Engagement Template Upda
 | :--- | :--- | :--- |
 | `TemplatePublished` | Template Publishing Service | `templateId`, `versionId`, `previousVersionId`, `locationKey`, `timestamp` |
 | `EngagementCreated` | Engagement Management System | `engagementId`, `tenantId`, `clientId`, `templateId`, `currentVersionId`, `timestamp` |
-| `EngagementOpened` | Engagement Management System | `engagementId`, `tenantId`, `currentVersionId`, `timestamp` *(reconciliation hook)* |
 | `UpdateDecisionRecorded` | Engagement Management System | `engagementId`, `tenantId`, `decision` (`APPLIED` \| `DECLINED`), `targetVersionId`, `userId`, `timestamp` |
 | `DiffSummaryRequested` | Engagement Management System | `templateId`, `fromVersionId`, `toVersionId` |
 | `SummaryGenerated` | Diff & Summary Service | `summaryId`, `templateId`, `fromVersionId`, `toVersionId`, `narrative` |
