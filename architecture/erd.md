@@ -31,9 +31,13 @@ erDiagram
     %% ─── tm (Template Management) ──────────────────────────────────────
 
     tm_product_template {
-        UUID   template_id PK
-        UUID   product_id
-        string name
+        UUID     template_id PK
+        UUID     product_id
+        string   name
+        string   created_by
+        datetime created_at
+        string   updated_by
+        datetime updated_at
     }
 
     tm_product_template_version {
@@ -42,15 +46,20 @@ erDiagram
         string   version
         UUID     previous_version_id
         string   location_key
-        datetime published_at
+        string   created_by
+        datetime created_at
     }
 
     %% ─── em (Engagement Management) ────────────────────────────────────
 
     em_client {
-        UUID   client_id  PK
-        UUID   tenant_id
-        string name
+        UUID     client_id  PK
+        UUID     tenant_id
+        string   name
+        string   created_by
+        datetime created_at
+        string   updated_by
+        datetime updated_at
     }
 
     em_engagement {
@@ -61,7 +70,10 @@ erDiagram
         UUID     initial_version_id
         string   location_key
         string   status
+        string   created_by
         datetime created_at
+        string   updated_by
+        datetime updated_at
     }
 
     %% ─── um (Update Management) ─────────────────────────────────────────
@@ -97,7 +109,8 @@ erDiagram
         UUID     from_version_id
         UUID     to_version_id
         string   narrative
-        datetime generated_at
+        string   created_by
+        datetime created_at
     }
 
     %% ─── Relationships (within schema only) ────────────────────────────
