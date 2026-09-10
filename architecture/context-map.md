@@ -35,7 +35,7 @@ graph TD
     subgraph TM["Template Management Context [U]"]
         TPS["Template Publishing Service"]
         TemplateDB[("tm schema\n(template + version index)")]
-        TemplateS3[("Template Zip Store\n(S3 — immutable, versioned)")]
+        BlobStore[/"Template Blob Store\n(immutable, versioned — impl. agnostic)"/]
     end
 
     subgraph EM["Engagement Management Context [U / CORE DOMAIN]"]
@@ -57,7 +57,7 @@ graph TD
 
     %% Content team publishes templates
     ContentTeam -->|"publishes new version"| TPS
-    TPS -->|"writes zip"| TemplateS3
+    TPS -->|"writes zip"| BlobStore
     TPS -->|"writes metadata"| TemplateDB
     TPS -->|"TemplatePublished event\n[OHS / PL]"| EMS
 
@@ -69,7 +69,8 @@ graph TD
     EMS -->|"getSummary(templateId, fromVersionId, toVersionId)\n[sync call — ACL translates to DS model]"| DiffEngine
 
     %% Diff & Summary is upstream to EMS
-    DiffEngine -->|"reads zip archives"| TemplateS3
+    DiffEngine -->|"getVersionChain(templateId, fromVersion)\n[sync call — to resolve location_keys]"| TPS
+    DiffEngine -->|"reads zips via resolved location_keys"| BlobStore
     DiffEngine <-->|"reads/writes summaries"| SummaryStore
 
     %% Practitioner interacts with Dashboard

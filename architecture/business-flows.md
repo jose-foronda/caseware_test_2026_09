@@ -70,7 +70,7 @@ Data flow descriptions for all use cases represented in the [Context Map](./cont
 3. EMS calls `DiffSummaryService.getSummary(templateId, fromVersionId, toVersionId)` synchronously.
 4. `DiffSummaryService` checks `ds_diff_summary` for an existing row matching `(template_id, from_version_id, to_version_id)`:
    - **Cache hit:** returns the existing narrative immediately.
-   - **Cache miss:** reads both zip archives using `location_key` from `tm_product_template_version`, computes a JSON diff, generates an LLM narrative, inserts a new `ds_diff_summary` row, returns the narrative.
+   - **Cache miss:** resolves both blobs using `location_key` from `TemplateQueryService`, computes a JSON diff, generates an LLM narrative, inserts a new `ds_diff_summary` row, returns the narrative.
 5. Engagement Update View displays the narrative to the practitioner.
 
 ---
@@ -104,7 +104,7 @@ Practitioner ──► EMS ──► em_client
 
 Practitioner clicks "Compare" ──► Dashboard API ──► EMS ──► DiffSummaryService (sync)
                                                                ├── cache hit  ──► returns narrative
-                                                               └── cache miss ──► S3 reads + LLM ──► ds_diff_summary ──► returns narrative
+                                                               └── cache miss ──► blob reads + LLM ──► ds_diff_summary ──► returns narrative
 
 Practitioner ──► Dashboard UI ──► Dashboard API ──► em_engagement_read_model (reads)
                                                └──► EMS.recordDecision ──► em_update_decision

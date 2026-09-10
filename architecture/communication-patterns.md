@@ -44,6 +44,7 @@ ProducerContext.SomeService  →  publishes  →  EventBus  →  ConsumerContext
 | `tm` | `em` | Async event | `TemplatePublished` | Content team publishes a new template version |
 | `em` | `tm` | Sync call | `TemplateQueryService.getVersionChain(templateId, fromVersion)` | `em` needs the ordered list of versions between current and latest |
 | `em` | `ds` | Sync call | `DiffSummaryService.getSummary(templateId, fromVersionId, toVersionId)` | Practitioner clicks Compare |
+| `ds` | `tm` | Sync call | `TemplateQueryService.getVersionChain(templateId, fromVersion)` | `ds` needs `location_key`s to read zip archives |
 | `dashboard` | `em` | Sync call | `EngagementQueryService.getEngagementsByTenant(tenantId)` | Dashboard UI loads update status list |
 | `dashboard` | `em` | Sync call | `EngagementService.recordDecision(engagementId, decision)` | Practitioner submits accept / decline |
 

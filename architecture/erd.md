@@ -124,6 +124,7 @@ erDiagram
 ## Notes
 
 - FK constraints are only enforced **within** the same schema. Cross-schema `template_id`, `version_id`, and `tenant_id` fields are correlation IDs kept consistent via domain events, not DB constraints.
+- `location_key` on `tm_product_template_version` and `em_engagement` is a storage-agnostic pointer to the blob (zip archive or engagement file). The backend — object storage, database `bytea`, or filesystem — is an implementation decision.
 - `tenant_id` is sourced from an external identity/auth system — it appears as a correlation ID in `em` but is never owned by this system.
 - `em_engagement.status` represents coarse lifecycle state only: `ACTIVE`, `ARCHIVED`, `DELETED`. Workflow state lives inside the blob and requires rehydration.
 - `em_engagement_read_model` is a projection rebuilt from events (`EngagementCreated`, `UpdateDecisionRecorded`, `TemplatePublished`). It is never the source of truth. `update_status` is derived at read time: `UPDATES_REVIEWED` if `last_decided_version_id == latest_version_id`, else `PENDING_UPDATES`.
