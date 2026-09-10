@@ -85,7 +85,7 @@ Gatling reports p95/p99 latency out of the box, which maps directly to the alert
 ## 4. Evaluation & Observability
 
 **Key metrics to instrument**
-- Event handler failure rate: failed `TemplatePublished` and `UpdateDecisionRecorded` handler executions are written to `sys_error_log` with `status = PENDING_RETRY` or `FAILED`. Alert on any non-zero `FAILED` count — a failed handler means the read model is silently stale.
+- Event handler failure rate: failed `TemplatePublished` and `UpdateDecisionRecorded` handler executions are written to `sys_error_log` with `status = PENDING_RETRY` or `FAILED`. A failed handler means the read model is silently stale.
 - `sys_error_log` row count by status: queryable at any time for operational visibility without external tooling.
 - Diff summary cache hit rate: low hit rate signals version pair diversity or cache eviction issues.
 - `DiffSummaryService` p95 latency on cache miss (blob reads + LLM call) — expected to be slow; set user expectation via UI loading state.
@@ -95,8 +95,8 @@ Gatling reports p95/p99 latency out of the box, which maps directly to the alert
 - Every decision records `decidedBy`, `decision`, `fromVersionId`, `targetVersionId` — already in `em_update_decision`.
 
 **Alerting**
-- `sys_error_log` rows with `status = FAILED` — alert on any non-zero count. A missed `TemplatePublished` fan-out means engagements silently show stale status.
-- A background retry job processes `PENDING_RETRY` rows automatically. `FAILED` status is set only after retries are exhausted, requiring manual intervention.
+- `sys_error_log` rows with `status = FAILED` — alert on new entries. A missed `TemplatePublished` fan-out means engagements silently show stale status.
+- `PENDING_RETRY` rows are retried by a background job. `FAILED` status requires manual intervention.
 - LLM call failures in `DiffSummaryService` — fall back gracefully (return raw diff or error message), never block the decision flow.
 
 ---
