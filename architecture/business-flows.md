@@ -71,7 +71,7 @@ Data flow descriptions for all use cases represented in the [Context Map](./cont
 2. Dashboard UI sends the decision to the **Dashboard API**.
 3. Dashboard API translates the decision into the EMS contract `[ACL]` and forwards it to the **Engagement Management System (EMS)**.
 4. EMS records the decision and emits an `UpdateDecisionRecorded` event `[OHS / PL]` consumed by the **Update Tracking Service**.
-5. Update Tracking Service writes an immutable record to the **Audit Log** and updates the **Engagement Read Model** to reflect the new decision state.
+5. Update Tracking Service writes an immutable record to **Update Decision** and updates the **Engagement Read Model** to reflect the new decision state.
 
 ---
 
@@ -86,7 +86,7 @@ Content Team ──► TPS ──► S3 / Template DB ──► UpdateSvc ──
 
 Practitioner ──► EMS ──► EngagementDB
                   │
-                  └──► UpdateSvc (events) ──► Read Model / Audit Log
+                  └──► UpdateSvc (events) ──► Read Model / Update Decision
 
 Practitioner ──► Dashboard UI ──► Dashboard API ──► Read Model (reads)
                                                 └──► EMS (decision writes via ACL)

@@ -85,18 +85,8 @@ erDiagram
         string   decision
         UUID     summary_id
         string   decided_by
+        string   reason
         datetime decided_at
-    }
-
-    um_audit_log {
-        UUID     log_id       PK
-        UUID     decision_id  FK
-        UUID     engagement_id
-        UUID     tenant_id
-        string   user_id
-        string   action
-        string   detail
-        datetime timestamp
     }
 
     %% ─── ds (Diff & Summary) ────────────────────────────────────────────
@@ -116,7 +106,6 @@ erDiagram
 
     em_client                ||--o{ em_engagement               : "has engagements"
 
-    um_update_decision       ||--|| um_audit_log                : "recorded in"
 ```
 
 ---
@@ -127,5 +116,4 @@ erDiagram
 - `tenant_id` is sourced from an external identity/auth system — it appears as a correlation ID in `em`, `um`, and `um_audit_log` but is never owned by this system.
 - `em_engagement` stores metadata columns plus a `location_key` pointing to the serialized blob in storage. All other engagement state beyond these metadata fields requires rehydration.
 - `um_engagement_read_model` is a projection rebuilt from events (`EngagementCreated`, `EngagementOpened`, `UpdateDecisionRecorded`, `TemplatePublished`). It is never the source of truth.
-- `ds_diff_summary` is keyed by `(template_id, from_version, to_version)` — generated once, shared across all engagements on the same version gap.
-- `um_audit_log` is append-only — no updates or deletes.
+- `um_update_decision` is append-only — no updates or deletes. It serves as the immutable decision trail.
