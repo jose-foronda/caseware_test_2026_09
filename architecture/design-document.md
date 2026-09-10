@@ -65,13 +65,19 @@ Each stage is independently deployable and testable. Stages 1 and 2 unblock para
 - Full UC-1 → UC-7 flow against a real DB (test schema): publish template, create engagement, verify read model, submit decision, verify read model update.
 - Cache hit vs cache miss paths in `DiffSummaryService`.
 
-**Contract tests**
-- `TemplateQueryService.getVersionChain()` — assert version chain ordering and `location_key` presence.
-- `DiffSummaryService.getSummary()` — assert narrative returned for a known version pair.
-
 **What is not tested here**
 - Actual template content application (out of scope per spec).
 - LLM narrative quality — validated separately via prompt evaluation, not unit tests.
+
+**Load & Performance Testing (recommended)**
+
+Using **Gatling** (JVM-based, tests as code, CI-friendly) against a staging environment seeded with realistic data (100s of engagements per tenant, multiple tenants, multiple products):
+
+- *Fan-out scenario*: publish a template update and assert all read model rows for that template are updated within an acceptable time window.
+- *Concurrent dashboard reads*: simulate N tenants hitting `getEngagementsByTenant()` simultaneously — read model is a simple indexed query, p95 latency should remain low.
+- *Concurrent decision submissions*: multiple practitioners submitting decisions at the same time — assert no lost updates on `em_update_decision` and correct final read model state.
+
+Gatling reports p95/p99 latency out of the box, which maps directly to the alerting thresholds defined in §4.
 
 ---
 
