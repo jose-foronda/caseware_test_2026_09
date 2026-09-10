@@ -1,0 +1,90 @@
+# Specification — Engagement Template Update Management System
+
+Current state of all architecture decisions and open items.
+
+---
+
+## Deployment Model
+
+- **Modular monolith** — single deployable, single database, schema-separated by bounded context.
+- Contexts communicate via in-process event bus (async) or public service interfaces (sync).
+- No cross-schema DB joins. Cross-context references are correlation IDs only.
+- Extractable to microservices later with no business logic changes (swap event bus → message broker, sync calls → HTTP/gRPC, split DB schemas).
+
+---
+
+## Schemas
+
+| Schema | Bounded Context | Owns |
+| :--- | :--- | :--- |
+| `tm` | Template Management | Templates and their versions |
+| `em` | Engagement Management | Clients, engagement blobs, read model, decisions |
+| `ds` | Diff & Summary | Diff summaries |
+
+> `tenant_id` is a correlation ID from an external identity/auth system — not owned by any schema.
+
+---
+
+## Key Decisions
+
+| # | Decision | Rationale |
+| :--- | :--- | :--- |
+| 1 | Read model lives in `em` schema | EMS owns creation, loading, and decision processing per the spec. Read model is a projection maintained by EMS event handlers. |
+| 2 | `um` schema removed | Update Tracking logic has no tables of its own — it writes into `em` via event handlers. |
+| 3 | Cumulative diff only (`current → latest`) | Practitioners care about compliance with the latest standard, not intermediate steps. One decision per accumulated span. |
+| 4 | `tenant_id` is a correlation ID | Tenant provisioning is out of scope — sourced from external auth. |
+| 5 | `em_engagement.status` is coarse lifecycle only | `ACTIVE`, `ARCHIVED`, `DELETED`. Workflow state lives in the blob and requires rehydration. |
+| 6 | No audit log table | `em_update_decision` is append-only and already captures who decided, when, what version, what summary was shown, and an optional reason. |
+| 7 | Version references use `version_id UUID` | Version strings (e.g. `"1.2.0"`) are display values only — all cross-table references use the stable UUID PK. |
+| 8 | `ds_diff_summary` keyed by `(template_id, from_version_id, to_version_id)` | Generated once, shared across all engagements on the same version gap. |
+
+---
+
+## Data Model Summary
+
+See [erd.md](./erd.md) for full field definitions.
+
+| Table | Schema | Notes |
+| :--- | :--- | :--- |
+| `tm_product_template` | `tm` | One row per template product |
+| `tm_product_template_version` | `tm` | Immutable — append only. `location_key` points to zip in storage. |
+| `em_client` | `em` | Tenant-scoped. `tenant_id` is a correlation ID. |
+| `em_engagement` | `em` | Metadata + `location_key` to blob. `current_version_id` updated on decision applied. |
+| `em_engagement_read_model` | `em` | Projection for dashboard queries. Never source of truth. |
+| `em_update_decision` | `em` | Append-only decision trail. Includes `reason` (nullable). |
+| `ds_diff_summary` | `ds` | Cached per version gap. `created_by` = system identity. |
+
+---
+
+## Communication Patterns Summary
+
+See [communication-patterns.md](./communication-patterns.md) for full details.
+
+| Type | Used for |
+| :--- | :--- |
+| Async event (in-process) | `TemplatePublished`, `EngagementCreated`, `EngagementOpened`, `UpdateDecisionRecorded`, `DiffSummaryRequested`, `SummaryGenerated` |
+| Sync call | Dashboard → `em` (read model queries, record decision), `em` → `tm` (version chain lookup) |
+
+---
+
+## Open Items
+
+- [ ] Decide on the technology stack (language, framework, DB engine).
+- [ ] Define the API contract for the Dashboard (REST vs GraphQL).
+- [ ] Define how `tenant_id` is passed and validated (JWT claim? header?).
+- [ ] Decide whether `em_engagement_read_model` is a DB table or a materialized view.
+- [ ] Handle the version chain gap question in the Dashboard UI — show intermediate versions for transparency or cumulative only?
+
+---
+
+## Reference Documents
+
+| File | Purpose |
+| :--- | :--- |
+| [context-map.md](./context-map.md) | Bounded context relationships and DDD patterns |
+| [erd.md](./erd.md) | Full data model per schema |
+| [business-flows.md](./business-flows.md) | End-to-end use case walkthroughs |
+| [communication-patterns.md](./communication-patterns.md) | Inter-context communication rules and event payloads |
+| [glossary.md](./glossary.md) | Ubiquitous language definitions |
+| [domain-examples.md](./domain-examples.md) | Concrete JSON examples for templates and engagements |
+| [ai-session-history.md](./ai-session-history.md) | AI-assisted session log |

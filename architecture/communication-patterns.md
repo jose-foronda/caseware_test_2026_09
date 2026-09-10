@@ -39,14 +39,14 @@ ProducerContext.SomeService  →  publishes  →  EventBus  →  ConsumerContext
 
 | Producer | Consumer | Pattern | Event / Method | Trigger |
 | :--- | :--- | :--- | :--- | :--- |
-| `em` | `um` | Async event | `EngagementCreated` | Practitioner creates a new engagement |
-| `em` | `um` | Async event | `EngagementOpened` | Practitioner opens an existing engagement (reconciliation) |
-| `em` | `um` | Async event | `UpdateDecisionRecorded` | Practitioner accepts or declines an update |
-| `tm` | `um` | Async event | `TemplatePublished` | Content team publishes a new template version |
-| `um` | `tm` | Sync call | `TemplateQueryService.getVersionChain(templateId, fromVersion)` | `um` needs the ordered list of versions between current and latest |
-| `um` | `ds` | Async event | `DiffSummaryRequested` | `um` needs a summary for a version gap (cache miss path) |
-| `ds` | `um` | Async event | `SummaryGenerated` | Diff & Summary Engine finishes generating a summary |
-| `dashboard` | `um` | Sync call | `ReadModelQueryService.getEngagementsByFirm(firmId)` | Dashboard UI loads update status list |
+| `em` | `em` | Async event | `EngagementCreated` | Practitioner creates a new engagement |
+| `em` | `em` | Async event | `EngagementOpened` | Practitioner opens an existing engagement (reconciliation) |
+| `em` | `em` | Async event | `UpdateDecisionRecorded` | Practitioner accepts or declines an update |
+| `tm` | `em` | Async event | `TemplatePublished` | Content team publishes a new template version |
+| `em` | `tm` | Sync call | `TemplateQueryService.getVersionChain(templateId, fromVersion)` | `em` needs the ordered list of versions between current and latest |
+| `em` | `ds` | Async event | `DiffSummaryRequested` | `em` needs a summary for a version gap (cache miss path) |
+| `ds` | `em` | Async event | `SummaryGenerated` | Diff & Summary Engine finishes generating a summary |
+| `dashboard` | `em` | Sync call | `EngagementQueryService.getEngagementsByTenant(tenantId)` | Dashboard UI loads update status list |
 | `dashboard` | `em` | Sync call | `EngagementService.recordDecision(engagementId, decision)` | Practitioner submits accept / decline |
 
 ---
@@ -64,20 +64,17 @@ TemplateQueryService (public)
 ### `em` — Engagement Management
 ```
 EngagementService (public)
-  + recordDecision(engagementId, decision, targetVersion, userId): void
-```
+  + recordDecision(engagementId, decision, targetVersionId, userId, reason): void
 
-### `um` — Update Management
-```
-ReadModelQueryService (public)
-  + getEngagementsByFirm(firmId): List<EngagementReadModel>
+EngagementQueryService (public)
+  + getEngagementsByTenant(tenantId): List<EngagementReadModel>
   + getEngagement(engagementId): EngagementReadModel
 ```
 
 ### `ds` — Diff & Summary
 ```
 DiffSummaryService (public)
-  + requestSummary(templateId, fromVersion, toVersion): void  ← async, result comes back via SummaryGenerated event
+  + requestSummary(templateId, fromVersionId, toVersionId): void  ← async, result comes back via SummaryGenerated event
 ```
 
 ### `dashboard` — Practitioner Dashboard
@@ -91,12 +88,12 @@ DiffSummaryService (public)
 
 | Event | Producer | Key Fields |
 | :--- | :--- | :--- |
-| `EngagementCreated` | `em` | `engagementId`, `firmId`, `templateId`, `initialTemplateVersion`, `timestamp` |
-| `EngagementOpened` | `em` | `engagementId`, `firmId`, `rehydratedTemplateVersion`, `timestamp` |
-| `UpdateDecisionRecorded` | `em` | `engagementId`, `firmId`, `decision`, `targetVersion`, `userId`, `timestamp` |
-| `TemplatePublished` | `tm` | `templateId`, `version`, `previousVersion`, `checksum`, `storageUri`, `timestamp` |
-| `DiffSummaryRequested` | `um` | `templateId`, `fromVersion`, `toVersion` |
-| `SummaryGenerated` | `ds` | `summaryId`, `templateId`, `fromVersion`, `toVersion`, `narrative`, `diffHash` |
+| `EngagementCreated` | `em` | `engagementId`, `tenantId`, `templateId`, `currentVersionId`, `timestamp` |
+| `EngagementOpened` | `em` | `engagementId`, `tenantId`, `currentVersionId`, `timestamp` |
+| `UpdateDecisionRecorded` | `em` | `engagementId`, `tenantId`, `decision`, `targetVersionId`, `userId`, `timestamp` |
+| `TemplatePublished` | `tm` | `templateId`, `versionId`, `previousVersionId`, `locationKey`, `timestamp` |
+| `DiffSummaryRequested` | `em` | `templateId`, `fromVersionId`, `toVersionId` |
+| `SummaryGenerated` | `ds` | `summaryId`, `templateId`, `fromVersionId`, `toVersionId`, `narrative` |
 
 ---
 

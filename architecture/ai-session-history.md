@@ -91,3 +91,19 @@ The JSON examples and explanations were captured into a permanent project file f
 | `architecture/glossary.md` | Updated with plain-language clarifications for EMS, Rehydration, Engagement Read Model, and Customer-Specific Engagement DB |
 | `architecture/domain-examples.md` | New file — concrete JSON examples illustrating Product Templates, Engagement Files, and the template update problem |
 | `architecture/ai-session-history.md` | This file |
+
+---
+
+### Session 2 — Architecture Documentation
+
+**Artifacts produced:** `context-map.md`, `business-flows.md`, `erd.md`, `communication-patterns.md`, `spec.md`
+
+**Key decisions made:**
+- Deployment model: modular monolith, single DB, schema-separated by bounded context
+- `um` schema removed — Update Tracking has no tables; writes into `em` via event handlers
+- `em` owns read model and update decisions (per PDF: EMS handles creation, loading, and decisions)
+- `tenant_id` is a correlation ID from external auth — not owned by any schema
+- Cumulative diff only (`current → latest`) — one decision per accumulated version span
+- No audit log table — `em_update_decision` is append-only and serves as the decision trail
+- Version references use `version_id UUID` throughout — version strings are display values only
+- `em_engagement.status` is coarse lifecycle only: `ACTIVE`, `ARCHIVED`, `DELETED`
