@@ -26,32 +26,26 @@ For inter-context communication see [communication-patterns.md](./communication-
 ```mermaid
 graph TD
 
-    %% ─── External Actors ───────────────────────────────────────────────
+    %% ─── External Actors ────────────────────────────────────────────────
     ContentTeam(["👤 Content Team\n(Caseware Internal)"])
     Practitioner(["👤 Practitioner\n(Accounting Firm User)"])
 
-    %% ─── Bounded Contexts ──────────────────────────────────────────────
+    %% ─── Bounded Contexts ───────────────────────────────────────────────
 
     subgraph TM["Template Management Context [U]"]
         TPS["Template Publishing Service"]
-        TemplateDB[("Product Template DB\n(metadata + version index)")]
+        TemplateDB[("tm schema\n(template + version index)")]
         TemplateS3[("Template Zip Store\n(S3 — immutable, versioned)")]
     end
 
-    subgraph EM["Engagement Management Context [U]"]
-        EMS["Engagement Management System (EMS)\n(create / rehydrate / record decision)"]
-        EngagementDB[("Customer Engagement DB\n(serialized blobs, per tenant)")]
-    end
-
-    subgraph UM["Update Management Context [CORE DOMAIN]"]
-        UpdateSvc["Update Tracking Service"]
-        ReadModel[("Engagement Read Model\n(queryable projection)")]
-        AuditLog[("Audit Log\n(immutable decision trail)")]
+    subgraph EM["Engagement Management Context [U / CORE DOMAIN]"]
+        EMS["Engagement Management System (EMS)\n(create / rehydrate / record decision / read model)"]
+        EngagementDB[("em schema\n(blobs + read model + decisions)")]
     end
 
     subgraph DS["Diff & Summary Context [U]"]
         DiffEngine["Diff & Summary Engine\n(JSON diff + LLM narrative)"]
-        SummaryCache[("Summary Cache\n(keyed by template_id+from+to)")]
+        SummaryStore[("ds schema\n(ds_diff_summary)")]
     end
 
     subgraph Dashboard["Practitioner Dashboard Context [D]"]
@@ -59,48 +53,43 @@ graph TD
         DashboardUI["Dashboard UI"]
     end
 
-    %% ─── Relationships ──────────────────────────────────────────────────
+    %% ─── Relationships ───────────────────────────────────────────────────
 
     %% Content team publishes templates
     ContentTeam -->|"publishes new version"| TPS
     TPS -->|"writes zip"| TemplateS3
     TPS -->|"writes metadata"| TemplateDB
-    TPS -->|"TemplatePublished event\n[OHS / PL]"| UpdateSvc
+    TPS -->|"TemplatePublished event\n[OHS / PL]"| EMS
 
-    %% EMS is upstream to Update Management
-    EMS -->|"EngagementCreated event\n[OHS / PL]"| UpdateSvc
-    EMS -->|"EngagementOpened event\n[OHS / PL — reconciliation hook]"| UpdateSvc
-    EMS -->|"UpdateDecisionRecorded event\n[OHS / PL]"| UpdateSvc
-    EMS <-->|"reads/writes blobs"| EngagementDB
+    %% EMS owns engagement lifecycle and read model
+    EMS <-->|"reads/writes blobs + metadata"| EngagementDB
+    EMS -->|"queries version chain"| TemplateDB
 
-    %% Update Management consumes events and maintains read model
-    UpdateSvc -->|"projects metadata"| ReadModel
-    UpdateSvc -->|"queries version index"| TemplateDB
-    UpdateSvc -->|"writes decision record"| AuditLog
-    UpdateSvc -->|"requests diff summary\n[ACL — translates to DS model]"| DiffEngine
+    %% EMS requests diff summaries
+    EMS -->|"DiffSummaryRequested event\n[ACL — translates to DS model]"| DiffEngine
 
-    %% Diff & Summary is upstream to Update Management
+    %% Diff & Summary is upstream to EMS
     DiffEngine -->|"reads zip archives"| TemplateS3
-    DiffEngine -->|"SummaryGenerated event\n[OHS / PL]"| UpdateSvc
-    DiffEngine <-->|"reads/writes cache"| SummaryCache
+    DiffEngine -->|"SummaryGenerated event\n[OHS / PL]"| EMS
+    DiffEngine <-->|"reads/writes summaries"| SummaryStore
 
     %% Practitioner interacts with Dashboard
     Practitioner -->|"views update status\nmakes accept/decline decision"| DashboardUI
     DashboardUI -->|"queries"| DashboardAPI
-    DashboardAPI -->|"reads\n[CF — conforms to read model schema]"| ReadModel
-    DashboardAPI -->|"forwards decision\n[ACL — translates to EMS contract]"| EMS
+    DashboardAPI -->|"reads read model\n[CF — conforms to read model schema]"| EMS
+    DashboardAPI -->|"records decision\n[ACL — translates to EMS contract]"| EMS
 
-    %% ─── Styles ─────────────────────────────────────────────────────────
+    %% ─── Styles ──────────────────────────────────────────────────────────
     classDef core        fill:#4a90d9,stroke:#2c5f8a,color:#fff
     classDef upstream    fill:#6db56d,stroke:#3d7a3d,color:#fff
     classDef downstream  fill:#e8a838,stroke:#a06a10,color:#fff
     classDef store       fill:#f0f0f0,stroke:#999,color:#333
     classDef actor       fill:#fff,stroke:#333,color:#333
 
-    class UpdateSvc,ReadModel,AuditLog core
-    class TPS,EMS,DiffEngine upstream
+    class EMS,EngagementDB core
+    class TPS,DiffEngine upstream
     class DashboardAPI,DashboardUI downstream
-    class TemplateDB,TemplateS3,EngagementDB,SummaryCache store
+    class TemplateDB,TemplateS3,SummaryStore store
     class ContentTeam,Practitioner actor
 ```
 
@@ -108,17 +97,17 @@ graph TD
 
 ## Key Design Decisions Visible in This Map
 
-**Update Management is the core domain.**
-It owns no raw data of its own — it projects a read model from upstream events. This keeps it decoupled from both EMS and Template Management.
+**EMS is the core domain.**
+It owns engagement creation, rehydration, decision recording, the read model, and update decisions — all within the `em` schema. The separate Update Management context was merged into EMS as it owns all three responsibilities per the system spec.
 
-**EMS is upstream but not queryable.**
-The Dashboard never calls EMS directly. It reads from the Engagement Read Model (maintained by Update Management via EMS events) and forwards decisions back to EMS through an ACL. This is the architectural response to the 1-minute rehydration constraint.
+**The Dashboard calls EMS directly for both reads and writes.**
+For reads it calls `EngagementQueryService` which reads from `em_engagement_read_model` — no rehydration involved. For writes it calls `EngagementService.recordDecision` via an ACL. EMS is never queried via rehydration from the Dashboard path.
 
-**Template Management uses S3 + a metadata DB.**
-S3 holds the immutable zip archives (cheap, durable, versioned by key). The Product Template DB holds the queryable index of versions, checksums, and `storage_uri` pointers. The Diff & Summary Engine reads zips directly from S3.
+**Template Management uses S3 + the `tm` schema.**
+S3 holds the immutable zip archives. The `tm` schema holds the queryable version index with `location_key` pointers. The Diff & Summary Engine reads zips directly from S3.
 
-**Diff & Summary is upstream to Update Management.**
-Summaries are generated once per `(template_id, from_version, to_version)` tuple and cached. Update Management requests them via an ACL, translating its internal model into the Diff & Summary contract — so neither context leaks into the other.
+**Diff & Summary is upstream to EMS.**
+Summaries are generated once per `(template_id, from_version_id, to_version_id)` UUID tuple and stored in `ds_diff_summary`. EMS requests them via an ACL, translating its internal model into the Diff & Summary contract.
 
 **The Dashboard is a pure downstream conformist for reads.**
-It conforms to the Read Model schema for queries (no translation needed — the Read Model is designed for this consumer). For writes (decisions), it uses an ACL to translate into EMS's contract.
+It conforms to the read model schema for queries — no translation needed. For writes (decisions) it uses an ACL to translate into EMS's contract.

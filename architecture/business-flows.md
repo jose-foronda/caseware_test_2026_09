@@ -9,85 +9,101 @@ Data flow descriptions for all use cases represented in the [Context Map](./cont
 **Actor:** Content Team (Caseware Internal)
 
 1. Content Team uploads a new template version to the **Template Publishing Service (TPS)**.
-2. TPS writes the zip archive to the **Template Zip Store (S3)** — immutable, versioned by key.
-3. TPS writes version metadata (version number, checksum, `storage_uri`) to the **Product Template DB**.
-4. TPS emits a `TemplatePublished` event `[OHS / PL]` (carrying version metadata) consumed by the **Update Tracking Service**.
-5. Update Tracking Service uses the event data to mark engagements on older versions as "update available" and projects that state into the **Engagement Read Model**.
+2. TPS writes the zip archive to storage and records a new `tm_product_template_version` row with `version`, `previous_version_id`, and `location_key`.
+3. TPS emits a `TemplatePublished` event (carrying `templateId`, `versionId`, `previousVersionId`, `locationKey`) consumed by EMS.
+4. EMS updates `em_engagement_read_model` for all engagements on that template — setting `latest_version_id` and `update_status = UPDATE_AVAILABLE` where `current_version_id != versionId`.
 
 ---
 
-## UC-2 — Practitioner Creates a New Engagement
+## UC-2 — Practitioner Creates a Client
 
 **Actor:** Practitioner (Accounting Firm User)
 
-1. Practitioner creates an engagement via the **Engagement Management System (EMS)**.
-2. EMS persists the engagement blob to the **Customer Engagement DB**.
-3. EMS emits an `EngagementCreated` event `[OHS / PL]` consumed by the **Update Tracking Service**.
-4. Update Tracking Service projects the new engagement's metadata (current template version, tenant, etc.) into the **Engagement Read Model**.
+1. Practitioner creates a client record in EMS, providing the client name.
+2. EMS inserts a new `em_client` row with a generated `client_id` and the `tenant_id` correlation ID from the auth context.
 
 ---
 
-## UC-3 — Practitioner Opens an Existing Engagement (Reconciliation)
+## UC-3 — Practitioner Creates a New Engagement
 
 **Actor:** Practitioner (Accounting Firm User)
 
-1. Practitioner opens an engagement in EMS (rehydration from blob — up to ~1 minute).
-2. EMS emits an `EngagementOpened` event `[OHS / PL — reconciliation hook]` consumed by the **Update Tracking Service**.
-3. Update Tracking Service uses this event as a reconciliation signal to verify the Read Model is consistent with the current state of the engagement (e.g. catches any missed events).
-
-> This flow exists because EMS rehydration is expensive. The Dashboard never calls EMS directly — it reads from the Read Model instead, avoiding the rehydration cost on every query.
+1. Practitioner creates an engagement for an existing client, selecting a product template.
+2. EMS resolves the latest `version_id` for the selected template from `tm_product_template_version`.
+3. EMS creates the engagement blob, stores it in blob storage, and inserts a new `em_engagement` row with `client_id`, `tenant_id`, `template_id`, `current_version_id`, and `location_key`.
+4. EMS inserts a corresponding `em_engagement_read_model` row with `update_status = UP_TO_DATE`.
+5. EMS emits an `EngagementCreated` event.
 
 ---
 
-## UC-4 — Practitioner Views Update Status on the Dashboard
+## UC-4 — Practitioner Opens an Existing Engagement (Reconciliation)
+
+**Actor:** Practitioner (Accounting Firm User)
+
+1. Practitioner opens an engagement — EMS rehydrates the blob from `em_engagement.location_key` (~1 minute).
+2. EMS reads `current_version_id` from the rehydrated blob's manifest.
+3. EMS emits an `EngagementOpened` event carrying the rehydrated `currentVersionId`.
+4. EMS uses this as a reconciliation signal — if the rehydrated `currentVersionId` differs from `em_engagement.current_version_id`, it corrects both `em_engagement` and `em_engagement_read_model`.
+
+> The Dashboard never triggers rehydration. It always reads from `em_engagement_read_model` directly.
+
+---
+
+## UC-5 — Practitioner Views Update Status on the Dashboard
 
 **Actor:** Practitioner (Accounting Firm User)
 
 1. Practitioner opens the **Dashboard UI**.
 2. Dashboard UI queries the **Dashboard API**.
-3. Dashboard API reads from the **Engagement Read Model** `[CF — conforms to read model schema]` — no translation needed, the Read Model is designed for this consumer.
-4. Dashboard UI renders the list of engagements with their update status (up-to-date, update available, update pending decision, etc.).
+3. Dashboard API calls `EngagementQueryService.getEngagementsByTenant(tenantId)`, which reads from `em_engagement_read_model`.
+4. Dashboard UI renders the list of engagements with their `update_status` and version gap (`current_version_id` vs `latest_version_id`).
 
 ---
 
-## UC-5 — Diff Summary is Generated for a Template Update
+## UC-6 — Diff Summary is Generated for a Template Update
 
-**Trigger:** Update Tracking Service detects an engagement is behind a new template version (via UC-1 or UC-2).
+**Trigger:** EMS detects `update_status = UPDATE_AVAILABLE` for an engagement (via UC-1 or UC-3).
 
-1. **Update Tracking Service** requests a diff summary from the **Diff & Summary Engine** `[ACL — translates internal model into DS contract]`.
-2. Diff & Summary Engine checks the **Summary Cache** (keyed by `template_id + from_version + to_version`).
-   - **Cache hit:** returns the cached summary immediately.
-   - **Cache miss:** reads both zip archives from the **Template Zip Store (S3)**, computes a JSON diff, generates an LLM narrative summary, writes the result to the Summary Cache.
-3. Diff & Summary Engine emits a `SummaryGenerated` event `[OHS / PL]` consumed by the **Update Tracking Service**.
-4. Update Tracking Service projects the summary reference into the **Engagement Read Model** so the Dashboard can display it.
+1. EMS emits a `DiffSummaryRequested` event carrying `templateId`, `fromVersionId` (`current_version_id`), `toVersionId` (`latest_version_id`).
+2. Diff & Summary Engine checks `ds_diff_summary` for an existing row matching `(template_id, from_version_id, to_version_id)`.
+   - **Cache hit:** emits `SummaryGenerated` immediately with the existing `summary_id`.
+   - **Cache miss:** reads both zip archives using `location_key` from `tm_product_template_version`, computes a JSON diff, generates an LLM narrative, inserts a new `ds_diff_summary` row, then emits `SummaryGenerated`.
+3. EMS handles `SummaryGenerated` and updates `em_engagement_read_model` with the `summary_id` so the Dashboard can link to it.
 
 ---
 
-## UC-6 — Practitioner Accepts or Declines a Template Update
+## UC-7 — Practitioner Accepts or Declines a Template Update
 
 **Actor:** Practitioner (Accounting Firm User)
 
-1. Practitioner reviews the diff summary on the **Dashboard UI** and makes a decision (accept / decline).
+1. Practitioner reviews the diff summary on the **Dashboard UI** and submits a decision (accept / decline) with an optional `reason`.
 2. Dashboard UI sends the decision to the **Dashboard API**.
-3. Dashboard API translates the decision into the EMS contract `[ACL]` and forwards it to the **Engagement Management System (EMS)**.
-4. EMS records the decision and emits an `UpdateDecisionRecorded` event `[OHS / PL]` consumed by the **Update Tracking Service**.
-5. Update Tracking Service writes an immutable record to **Update Decision** and updates the **Engagement Read Model** to reflect the new decision state.
+3. Dashboard API calls `EngagementService.recordDecision(engagementId, decision, targetVersionId, userId, reason)`.
+4. EMS inserts a new `em_update_decision` row (append-only) with `from_version_id`, `target_version_id`, `decision`, `summary_id`, `decided_by`, and `reason`.
+5. EMS emits an `UpdateDecisionRecorded` event.
+6. EMS updates `em_engagement_read_model.update_status`:
+   - `APPLIED` → `update_status = UP_TO_DATE`, `current_version_id = target_version_id`
+   - `DECLINED` → `update_status = UPDATE_DECLINED`
+7. If `APPLIED`, EMS also updates `em_engagement.current_version_id = target_version_id`.
 
 ---
 
 ## Data Flow Summary
 
 ```
-Content Team ──► TPS ──► S3 / Template DB ──► UpdateSvc ──► Read Model ──► Dashboard
-                                                   ▲
-                                              DiffEngine
-                                              (S3 reads,
-                                               cache writes)
+Content Team ──► TPS ──► tm_product_template_version
+                           │
+                           └──► TemplatePublished event ──► EMS ──► em_engagement_read_model
 
-Practitioner ──► EMS ──► EngagementDB
-                  │
-                  └──► UpdateSvc (events) ──► Read Model / Update Decision
+Practitioner ──► EMS ──► em_client
+                      ──► em_engagement (blob + metadata)
+                      ──► em_engagement_read_model
 
-Practitioner ──► Dashboard UI ──► Dashboard API ──► Read Model (reads)
-                                                └──► EMS (decision writes via ACL)
+EMS ──► DiffSummaryRequested ──► Diff Engine ──► ds_diff_summary
+                                      │
+                                      └──► SummaryGenerated ──► EMS ──► em_engagement_read_model
+
+Practitioner ──► Dashboard UI ──► Dashboard API ──► em_engagement_read_model (reads)
+                                               └──► EMS.recordDecision ──► em_update_decision
+                                                                       └──► em_engagement (current_version_id)
 ```
