@@ -43,8 +43,7 @@ ProducerContext.SomeService  →  publishes  →  EventBus  →  ConsumerContext
 | `em` | `em` | Async event | `UpdateDecisionRecorded` | Practitioner accepts or declines an update |
 | `tm` | `em` | Async event | `TemplatePublished` | Content team publishes a new template version |
 | `em` | `tm` | Sync call | `TemplateQueryService.getVersionChain(templateId, fromVersion)` | `em` needs the ordered list of versions between current and latest |
-| `em` | `ds` | Async event | `DiffSummaryRequested` | `em` needs a summary for a version gap (cache miss path) |
-| `ds` | `em` | Async event | `SummaryGenerated` | Diff & Summary Engine finishes generating a summary |
+| `em` | `ds` | Sync call | `DiffSummaryService.getSummary(templateId, fromVersionId, toVersionId)` | Practitioner clicks Compare |
 | `dashboard` | `em` | Sync call | `EngagementQueryService.getEngagementsByTenant(tenantId)` | Dashboard UI loads update status list |
 | `dashboard` | `em` | Sync call | `EngagementService.recordDecision(engagementId, decision)` | Practitioner submits accept / decline |
 
@@ -73,7 +72,7 @@ EngagementQueryService (public)
 ### `ds` — Diff & Summary
 ```
 DiffSummaryService (public)
-  + requestSummary(templateId, fromVersionId, toVersionId): void  ← async, result comes back via SummaryGenerated event
+  + getSummary(templateId, fromVersionId, toVersionId): Summary
 ```
 
 ### `dashboard` — Practitioner Dashboard
@@ -87,11 +86,9 @@ DiffSummaryService (public)
 
 | Event | Producer | Key Fields |
 | :--- | :--- | :--- |
-| `EngagementCreated` | `em` | `engagementId`, `tenantId`, `templateId`, `currentVersionId`, `timestamp` |
+| `EngagementCreated` | `em` | `engagementId`, `tenantId`, `clientId`, `templateId`, `currentVersionId`, `timestamp` |
 | `UpdateDecisionRecorded` | `em` | `engagementId`, `tenantId`, `decision`, `targetVersionId`, `userId`, `timestamp` |
 | `TemplatePublished` | `tm` | `templateId`, `versionId`, `previousVersionId`, `locationKey`, `timestamp` |
-| `DiffSummaryRequested` | `em` | `templateId`, `fromVersionId`, `toVersionId` |
-| `SummaryGenerated` | `ds` | `summaryId`, `templateId`, `fromVersionId`, `toVersionId`, `narrative` |
 
 ---
 
