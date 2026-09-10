@@ -37,10 +37,10 @@ erDiagram
     }
 
     tm_product_template_version {
-        UUID     version_id      PK
-        UUID     template_id     FK
+        UUID     version_id          PK
+        UUID     template_id         FK
         string   version
-        string   previous_version
+        UUID     previous_version_id
         string   location_key
         datetime published_at
     }
@@ -54,11 +54,11 @@ erDiagram
     }
 
     em_engagement {
-        UUID     engagement_id           PK
-        UUID     client_id               FK
+        UUID     engagement_id      PK
+        UUID     client_id          FK
         UUID     tenant_id
         UUID     template_id
-        string   initial_template_version
+        UUID     initial_version_id
         string   location_key
         string   status
         datetime created_at
@@ -67,21 +67,21 @@ erDiagram
     %% ─── um (Update Management) ─────────────────────────────────────────
 
     um_engagement_read_model {
-        UUID     engagement_id            PK
+        UUID     engagement_id      PK
         UUID     tenant_id
         UUID     template_id
-        string   current_template_version
-        string   latest_template_version
+        UUID     current_version_id
+        UUID     latest_version_id
         string   update_status
         datetime last_evaluated_at
     }
 
     um_update_decision {
-        UUID     decision_id  PK
+        UUID     decision_id       PK
         UUID     engagement_id
         UUID     template_id
-        string   from_version
-        string   target_version
+        UUID     from_version_id
+        UUID     target_version_id
         string   decision
         UUID     summary_id
         string   decided_by
@@ -92,10 +92,10 @@ erDiagram
     %% ─── ds (Diff & Summary) ────────────────────────────────────────────
 
     ds_diff_summary {
-        UUID     summary_id  PK
+        UUID     summary_id      PK
         UUID     template_id
-        string   from_version
-        string   to_version
+        UUID     from_version_id
+        UUID     to_version_id
         string   narrative
         datetime generated_at
     }
