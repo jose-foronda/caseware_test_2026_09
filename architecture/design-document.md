@@ -112,12 +112,9 @@ Gatling reports p95/p99 latency out of the box, which maps directly to the alert
 | :--- | :--- | :--- |
 | `TemplatePublished` handler fails mid-fan-out | Some engagements show stale `latest_version_id` | Idempotent handler + retry via `sys_error_log`. Fan-out is a bulk update — wrap in a transaction per batch. |
 | `DiffSummaryService` LLM call fails | Practitioner cannot view narrative | Return raw JSON diff as fallback. Decision flow is unblocked — narrative is informational only. |
-| Read model row missing for an engagement | Dashboard shows no entry | `EngagementCreated` handler is idempotent — re-emit or backfill on detection via `sys_error_log`. |
-| Practitioner declines all versions, new version published | Status correctly flips to `PENDING_UPDATES` | Derived from `last_decided_version_id != latest_version_id` — no special handling needed. |
-| Large tenant with 100s of engagements on same template | Fan-out on `TemplatePublished` is a bulk write | Batched update with configurable page size. Acceptable given ~1/week publish frequency. |
 
 **Key tradeoffs**
 
-- **Modular monolith vs microservices**: chosen for simplicity and deployment fit. The context boundaries are clean — extractable later by swapping in-process event bus for a message broker and splitting schemas.
+- **In-process events vs message broker (SQS/SNS)**: `@TransactionalEventListener` is simple and atomic — handlers only fire after the originating transaction commits, so no phantom updates on rollback. The tradeoff is durability: if a handler throws, there is no built-in retry queue — `sys_error_log` fills that gap manually. A message broker would give durable delivery, DLQs, and retry out of the box, at the cost of distributed systems complexity and eventual consistency across the read model. chosen for simplicity and deployment fit. The context boundaries are clean — extractable later by swapping in-process event bus for a message broker and splitting schemas.
 - **Lazy diff generation vs pre-computation**: pre-computing on `TemplatePublished` would add latency to the publish flow and waste compute for version pairs nobody compares. Lazy + cache is the right tradeoff given infrequent publishes and shared cache across tenants.
 - **Stored read model vs live query**: live derivation would require rehydration (~1 min/engagement) — not viable at scale. The read model projection is the only practical approach given the hard constraint.
