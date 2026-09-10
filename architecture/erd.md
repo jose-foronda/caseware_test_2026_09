@@ -67,6 +67,7 @@ erDiagram
         UUID     tenant_id
         UUID     template_id
         UUID     current_version_id
+        int      fiscal_year
         string   location_key
         string   status
         string   created_by
@@ -82,6 +83,7 @@ erDiagram
         UUID     current_version_id
         UUID     latest_version_id
         UUID     last_decided_version_id
+        int      fiscal_year
         string   update_status           "GENERATED: last_decided_version_id = latest_version_id ? UPDATES_REVIEWED : PENDING_UPDATES"
     }
 
