@@ -89,7 +89,7 @@ graph TD
     class EMS,EngagementDB core
     class TPS,DiffEngine upstream
     class DashboardAPI,DashboardUI downstream
-    class TemplateDB,TemplateS3,SummaryStore store
+    class TemplateDB,BlobStore,SummaryStore store
     class ContentTeam,Practitioner actor
 ```
 
@@ -103,8 +103,8 @@ It owns engagement creation, rehydration, decision recording, the read model, an
 **The Dashboard calls EMS directly for both reads and writes.**
 For reads it calls `EngagementQueryService` which reads from `em_engagement_read_model` — no rehydration involved. For writes it calls `EngagementService.recordDecision` via an ACL. EMS is never queried via rehydration from the Dashboard path.
 
-**Template Management uses S3 + the `tm` schema.**
-S3 holds the immutable zip archives. The `tm` schema holds the queryable version index with `location_key` pointers. The Diff & Summary Engine reads zips directly from S3.
+**Template Management uses a blob store + the `tm` schema.**
+The blob store (e.g. object storage, database, or filesystem) holds the immutable versioned blobs. The `tm` schema holds the queryable version index with `location_key` pointers. The Diff & Summary Engine resolves `location_key`s via `TemplateQueryService` before reading blobs directly from the store.
 
 **Diff & Summary is upstream to EMS.**
 Summaries are generated once per `(template_id, from_version_id, to_version_id)` UUID tuple and stored in `ds_diff_summary`. EMS calls `DiffSummaryService.getSummary()` synchronously via an ACL, translating its internal model into the Diff & Summary contract. No events are involved in this flow.
