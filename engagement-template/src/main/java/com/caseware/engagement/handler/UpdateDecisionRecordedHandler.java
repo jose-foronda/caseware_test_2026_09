@@ -7,11 +7,8 @@ import com.caseware.engagement.model.EngagementReadModelEntity;
 import com.caseware.engagement.repository.EngagementReadModelRepository;
 import com.caseware.engagement.repository.EngagementRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.scheduling.annotation.Async;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.event.TransactionPhase;
-import org.springframework.transaction.event.TransactionalEventListener;
 
 @Component
 @RequiredArgsConstructor
@@ -20,9 +17,7 @@ public class UpdateDecisionRecordedHandler {
     private final EngagementReadModelRepository readModelRepository;
     private final EngagementRepository engagementRepository;
 
-    @Async
-    @Transactional
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @EventListener
     public void handle(UpdateDecisionRecorded event) {
         EngagementReadModelEntity readModel = readModelRepository.findById(event.engagementId())
                 .orElseThrow(() -> new IllegalArgumentException(
