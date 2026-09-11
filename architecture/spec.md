@@ -15,12 +15,28 @@ Current state of all architecture decisions and open items.
 | Testing Strategy | ✅ Done | design-document.md §3 |
 | Evaluation & Observability | ✅ Done | design-document.md §4 |
 | Failure Modes & Tradeoffs | ✅ Done | design-document.md §5 |
+| Assumptions & Constraints | ✅ Done | design-document.md §0 (above §1) |
 
 ### Part 2: Targeted Implementation
 
 | Section | Status | Notes |
 | :--- | :--- | :--- |
-| Code slice | ⬜ Todo | To be decided — interfaces, contracts, correctness |
+| Code slice | ✅ Done | UC-7 vertical slice in [`engagement-template/`](../engagement-template) — see [implementation-spec.md](./implementation-spec.md) |
+
+---
+
+## Deliverables
+
+Checklist against the "Deliverables" section of the test brief:
+
+| # | Required deliverable | Where to find it |
+| :--- | :--- | :--- |
+| 1 | **Design document** (PDF or Markdown) — High-Level Architecture, Implementation Plan, Testing Strategy, Evaluation & Observability, Failure Modes & Tradeoffs | [`design-document.md`](./design-document.md) |
+| 2 | **Code / repository** *(optional)* — Part 2 targeted implementation (UC-7 vertical slice, contract + correctness focus, with tests) | [`engagement-template/`](../engagement-template) — see [`implementation-spec.md`](./implementation-spec.md) |
+| 3 | **Session history for AI tooling** *(optional)* | [`ai-session-history.md`](./ai-session-history.md) |
+| 4 | **Diagrams** — bounded context map & entity-relationship diagrams (Mermaid) | [`context-map.md`](./context-map.md) · [`erd.md`](./erd.md) |
+
+> The original test brief is available at the repository root as [`Senior Developer, SE - Take-Home Test.pdf`](../Senior%20Developer%2C%20SE%20-%20Take-Home%20Test.pdf).
 
 ---
 
@@ -58,6 +74,31 @@ Current state of all architecture decisions and open items.
 | 7 | Version references use `version_id UUID` | Version strings (e.g. `"1.2.0"`) are display values only — all cross-table references use the stable UUID PK. |
 | 8 | `ds_diff_summary` keyed by `(template_id, from_version_id, to_version_id)` | Generated once, shared across all engagements on the same version gap. |
 | 9 | Events consumed **synchronously in-transaction** | In-process `@EventListener` — producer work and projection commit/roll back together, nothing is dropped. Async consumption via a message broker with durable delivery and retries is deferred until those guarantees are required. |
+
+---
+
+## Assumptions & Constraints
+
+Full details in [design-document.md](./design-document.md#assumptions--constraints). Summary:
+
+**Hard constraints (from the brief):**
+1. Opening an engagement takes ~1 minute (rehydration) — dashboard must never trigger it.
+2. Stored engagements are not directly queryable; only `template_id` + version are stored.
+3. Templates are zip archives of structured JSON.
+4. Template DB is shared across firms and holds no engagement info.
+5. JSON diff is available but users are non-technical — need human-readable output.
+6. Only integration surface is adding hooks/events to template publishing & EMS.
+7. Applying template content is out of scope.
+
+**Assumptions (stated where the brief was silent):**
+1. Java 21 + Spring Boot 3, PostgreSQL, single ECS service + RDS on AWS.
+2. Scale is small (~100s engagements/firm, ~1 update/week/product) — no distributed pipeline.
+3. In-process synchronous events; broker deferred but event contract is broker-ready.
+4. `tenant_id` is a correlation ID from external auth; tenant provisioning out of scope.
+5. Version identity = UUID; version strings are display-only.
+6. `em` sync-calls `tm` for the version chain to validate decision targets.
+7. Decisions span `current → target`; practitioners resolve accumulated updates one by one.
+8. Diff narratives are shared across tenants (keyed by version gap).
 
 ---
 
@@ -109,3 +150,4 @@ See [communication-patterns.md](./communication-patterns.md) for full details.
 | [glossary.md](./glossary.md) | Ubiquitous language definitions |
 | [domain-examples.md](./domain-examples.md) | Concrete JSON examples for templates and engagements |
 | [ai-session-history.md](./ai-session-history.md) | AI-assisted session log |
+| [implementation-spec.md](./implementation-spec.md) | UC-7 vertical slice status, correctness rules, open items |

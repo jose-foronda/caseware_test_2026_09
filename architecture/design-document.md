@@ -2,6 +2,35 @@
 
 ---
 
+## Assumptions & Constraints
+
+### Hard constraints (from the test brief)
+
+| # | Constraint | Where it bites |
+| :--- | :--- | :--- |
+| 1 | Opening an engagement takes **~1 minute** (rehydration) — this is a hard constraint. | The dashboard must never trigger rehydration; all reads go through the read model. |
+| 2 | Stored engagements are **not a directly queryable record** — only `template_id` + version are stored in customer-specific DBs. | No live derivation of engagement state; status must be pre-materialized. |
+| 3 | Product templates are **zip archives of structured JSON**. | Diff/narrative layer must understand JSON structure, not a DB schema. |
+| 4 | The template DB is **shared between firms** and holds **no engagement information**. | Engagement tracking lives only in `em`; template DB is read-only from our perspective. |
+| 5 | A quick, reliable **JSON diff extractor exists**; users are **non-technical** and want human-readable output. | `ds` must translate JSON diff → narrative; raw JSON is the fallback, not the default. |
+| 6 | We may add **hooks/events** to template publishing and the engagement management system. | This is the only integration surface — no direct DB writes to the engagement blob store. |
+| 7 | **Applying** updated template content is **out of scope**. | The system stops at surfacing updates and recording accept/decline decisions. |
+
+### Assumptions (stated where the brief was silent)
+
+| # | Assumption | Rationale |
+| :--- | :--- | :--- |
+| 1 | Stack: **Java 21 + Spring Boot 3**, PostgreSQL, deployed as one ECS service + RDS on **AWS**. | Brief notes AWS shop; JVM matches the existing EMS deployment model (modular monolith). |
+| 2 | Scale is small: **~100s of engagements per firm**, **~1 template update/week/product**. | Fan-out and diff-summary cache are cheap; a distributed pipeline would be over-engineering. |
+| 3 | **In-process, synchronous events** are sufficient for now. | Producer work and read-model projection commit/roll back together — nothing dropped. Brokered async (SQS/SNS) is deferred; the event contract is broker-ready. |
+| 4 | `tenant_id` is a **correlation ID from external auth**; tenant provisioning is out of scope. | Inferred from "customer-specific databases" — isolation is a given, identity is external. |
+| 5 | Version identity is a **UUID**; version strings (e.g. `"1.2.0"`) are display-only. | Stable PKs for joins; human-friendly labels for the UI. |
+| 6 | `em` can **sync-call `tm` for the version chain** to validate a decision target. | Needed to guarantee the target lies in `current → latest`; deferred in the slice but assumed for production. |
+| 7 | Accumulated updates are decided **as spans**: one decision per `current → target` jump; practitioners may resolve intermediate versions one by one. | Matches "multiple updates accumulate" without a per-version decision matrix. |
+| 8 | Diff narratives are shared across tenants (keyed by version gap), not per engagement. | Same template gap reads the same for every firm — caching is a natural win. |
+
+---
+
 ## 1. High-Level Architecture
 
 The system is designed as a **modular monolith** — a single deployable with a single database, schema-separated by bounded context. This matches the existing EMS deployment model and avoids distributed systems complexity while keeping context boundaries clean and extractable to microservices later.
