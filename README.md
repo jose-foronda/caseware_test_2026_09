@@ -4,6 +4,19 @@ This repository contains the architecture and design work for the CaseWare take-
 
 ---
 
+## Deliverables
+
+Checklist against the "Deliverables" section of the test brief:
+
+| # | Required deliverable | Where to find it |
+| :--- | :--- | :--- |
+| 1 | **Design document** (PDF or Markdown) — covers High-Level Architecture, Implementation Plan, Testing Strategy, Evaluation & Observability, Failure Modes & Tradeoffs | [`architecture/design-document.md`](./architecture/design-document.md) |
+| 2 | **Code / repository** *(optional)* — Part 2 targeted implementation (UC-7 vertical slice, contract + correctness focus, with tests) | [`engagement-template/`](./engagement-template) — see [`architecture/implementation-spec.md`](./architecture/implementation-spec.md) |
+| 3 | **Session history for AI tooling** *(optional)* | [`architecture/ai-session-history.md`](./architecture/ai-session-history.md) |
+| 4 | **Diagrams** — bounded context map & entity-relationship diagrams (Mermaid) | [`architecture/context-map.md`](./architecture/context-map.md) · [`architecture/erd.md`](./architecture/erd.md) |
+
+---
+
 ## How to Read This Work
 
 **Start here:** [`architecture/design-document.md`](./architecture/design-document.md)
