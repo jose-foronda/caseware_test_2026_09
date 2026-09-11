@@ -15,7 +15,7 @@ demonstrating:
 
 1. The **public service contracts** (`EngagementService`, `EngagementQueryService`)
 2. The **event contract** (`UpdateDecisionRecorded`)
-3. The **async read-model projection** handler
+3. The **in-transaction (synchronous) read-model projection** handler
 4. **Correctness logic** (decision validation + `update_status` derivation) with unit tests
 
 Legacy `com.decisionengine` code is untouched; it will be deleted by the user.
@@ -31,13 +31,13 @@ DashboardController POST /api/v1/dashboard/engagements/{id}/decisions
   → EngagementService.recordDecision(engagementId, decision, targetVersionId, userId, reason)
       ├─ validates: decision/target/userId present; engagement exists
       ├─ validates: pending update exists (latest != decided base)  [spec decision #3]
-      ├─ validates: target == latestVersionId  [cumulative diff, one decision per span]
+      ├─ validates: target is ahead of current version  [resolve one by one — intermediate targets allowed]
       ├─ appends em.em_update_decision (append-only trail)
       └─ publishes UpdateDecisionRecorded
-  → UpdateDecisionRecordedHandler (@Async @TransactionalEventListener AFTER_COMMIT)
-      ├─ APPLIED  → read_model.current_version_id = target, last_decided = target
-      │            engagement.current_version_id = target
-      └─ DECLINED → read_model.last_decided_version_id = target  (current untouched)
+→ UpdateDecisionRecordedHandler (@EventListener, in-transaction, synchronous)
+       ├─ APPLIED  → read_model.current_version_id = target, last_decided = target
+       │            engagement.current_version_id = target
+       └─ DECLINED → read_model.last_decided_version_id = target  (current untouched)
 
 DashboardController GET /api/v1/dashboard/engagements?tenantId=
   → EngagementQueryService.getEngagementsByTenant(tenantId)  (reads read model only)
@@ -49,43 +49,40 @@ DashboardController GET /api/v1/dashboard/engagements?tenantId=
 | Layer | Files |
 | :--- | :--- |
 | Schema | `docker/init.sql` — `em` schema (3 tables, indexes, grants) + demo seed (2 engagements, 2 read models, 1 decision) |
-| Entry point | `src/main/java/com/caseware/EngagementApplication.java` (`@EnableAsync`, scans `com.caseware`) |
+| Entry point | `src/main/java/com/caseware/EngagementApplication.java` (scans `com.caseware`) |
 | model | `com.caseware.engagement.model`: `Engagement`, `EngagementReadModelEntity`, `UpdateDecision`, `DecisionType`, `UpdateStatus` |
 | repository | `EngagementRepository`, `EngagementReadModelRepository`, `UpdateDecisionRepository` |
 | event | `com.caseware.engagement.event.UpdateDecisionRecorded` (record: engagementId, tenantId, decision, targetVersionId, userId, timestamp) |
 | dto | `RecordDecisionRequest`, `EngagementReadModel` (projection incl. derived `updateStatus`) |
 | service | `EngagementService` + `EngagementServiceImpl`; `EngagementQueryService` + `EngagementQueryServiceImpl` |
-| handler | `handler.UpdateDecisionRecordedHandler` (`@Async` + `@TransactionalEventListener` AFTER_COMMIT) |
+| handler | `handler.UpdateDecisionRecordedHandler` (`@EventListener`, in-transaction — atomic with the decision insert) |
 | controller | `controller.DashboardController` (`GET /engagements`, `GET /engagements/{id}`, `POST /engagements/{id}/decisions`) |
 | tests | `DashboardControllerTest`, `EngagementServiceImplTest`, `UpdateDecisionRecordedHandlerTest`, `EngagementQueryServiceImplTest` |
 | build | `build.gradle` — `bootRun`/`bootJar` `mainClass = com.caseware.EngagementApplication` |
 
 ### Key correctness rules encoded
 
-- Decision target must be the **latest** version (`targetVersionId == latestVersionId`) — spec decision #3 (cumulative span).
-- No decision allowed when there is no pending update (`latest == lastDecided/current`).
-- `from_version_id` = last decided (falls back to current).
+- No decision allowed when there is no pending update (`latest == lastDecided`, i.e. the span was already decided — even if `current` lags after a decline).
+- `from_version_id` = current version (the version the engagement is actually on), **not** last decided — after a decline `current` lags behind `lastDecided`.
+- Target may be any version **ahead of current** (user resolves pending versions one by one), not necessarily `latest`. Full chain-level validation (target is a real version in `current → latest`) is deferred to the real `tm` version-chain lookup.
+- Events are consumed **synchronously in-transaction** (`@EventListener`) — atomic with the decision insert. Async consumption via a message broker with guaranteed retries is deferred; swap when a broker is adopted.
 - `update_status` derivation: last decided == latest → `UPDATES_REVIEWED`, else `PENDING_UPDATES` (null last decided → `PENDING_UPDATES`).
 
-### Status: compilation
+### Status: compilation + tests
 
-`gradlew compileJava compileTestJava` → **BUILD SUCCESSFUL** (all new code + tests compile).
+`gradlew test --tests "com.caseware.engagement.*"` → **BUILD SUCCESSFUL** (all new code + tests pass).
 
 ---
 
 ## Pending — pickup tomorrow
 
-1. **Run the unit tests** (Mockito/standalone MockMvc — no DB needed):
-   ```
-   .\gradlew.bat test --tests "com.caseware.engagement.*" --console=plain
-   ```
-2. **Optional smoke test** — boot against Postgres (`engagement-template/docker`):
+1. **Optional smoke test** — boot against Postgres (`engagement-template/docker`):
    - `docker compose up` (or `docker-compose up`)
    - Start app: `.\gradlew.bat bootRun`
    - Manual checks:
      - GET `/api/v1/dashboard/engagements?tenantId=99999999-9999-9999-9999-999999999991` → 1 row `PENDING_UPDATES`
      - POST `/api/v1/dashboard/engagements/11111111-1111-1111-1111-111111111111/decisions` with `{"decision":"APPLIED","targetVersionId":"00000000-0000-0000-0000-000000000002","userId":"demo-user"}` → 202; re-GET → `UPDATES_REVIEWED`
-3. **Anything you decide after review** (e.g., package name `com.caseware`, 202 vs 204 response, adding a global exception handler).
+2. **Anything you decide after review** (e.g., package name `com.caseware`, 202 vs 204 response, adding a global exception handler).
 
 ---
 

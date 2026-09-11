@@ -10,8 +10,9 @@ For data ownership see [erd.md](./erd.md).
 
 1. No context imports a repository or accesses a DB table from another schema.
 2. Synchronous calls are only made to the **public service interface** of another context — never to internal classes.
-3. Asynchronous communication uses an **in-process event bus** (same decoupling as a message broker, no network overhead).
+3. Events are **published in-process and consumed synchronously** within the originating transaction (`@EventListener`) — decision + projection commit or roll back together.
 4. If a context needs data owned by another context, it either calls its public service or maintains its own projection via events — never a cross-schema join.
+5. Async consumption (message broker with durable delivery and retries) is deferred — only adopted when those guarantees are required.
 
 ---
 
@@ -25,13 +26,16 @@ Used when the caller needs an answer before it can proceed.
 CallerContext.SomeService  →  calls  →  TargetContext.PublicServiceInterface
 ```
 
-### Asynchronous — In-Process Event Bus
+### Event — Synchronous In-Process Consumption
 
-Used when the producer does not need a response. The event bus dispatches to all subscribers in-process.
+Used when the producer does not need a response but must guarantee the consumer ran. The event is dispatched in-process and handled **synchronously in the same transaction** as the producer's work, so everything commits or rolls back atomically. A failure in the handler rolls the producer back too — no lost or half-applied events.
 
 ```
 ProducerContext.SomeService  →  publishes  →  EventBus  →  ConsumerContext.SomeHandler
+        (same transaction, synchronous)
 ```
+
+> **Future:** if a message broker (SNS/SQS, Kafka) is adopted for durable delivery, DLQs, and retries, these same handlers run *asynchronously*. The event contract and subscriber code stay the same — only the dispatch changes.
 
 ---
 
@@ -39,9 +43,9 @@ ProducerContext.SomeService  →  publishes  →  EventBus  →  ConsumerContext
 
 | Producer | Consumer | Pattern | Event / Method | Trigger |
 | :--- | :--- | :--- | :--- | :--- |
-| `em` | `em` | Async event | `EngagementCreated` | Practitioner creates a new engagement |
-| `em` | `em` | Async event | `UpdateDecisionRecorded` | Practitioner accepts or declines an update |
-| `tm` | `em` | Async event | `TemplatePublished` | Content team publishes a new template version |
+| `em` | `em` | Event (sync in-tx) | `EngagementCreated` | Practitioner creates a new engagement |
+| `em` | `em` | Event (sync in-tx) | `UpdateDecisionRecorded` | Practitioner accepts or declines an update |
+| `tm` | `em` | Event (sync in-tx) | `TemplatePublished` | Content team publishes a new template version |
 | `em` | `tm` | Sync call | `TemplateQueryService.getVersionChain(templateId, fromVersion)` | `em` needs the ordered list of versions between current and latest |
 | `em` | `ds` | Sync call | `DiffSummaryService.getSummary(templateId, fromVersionId, toVersionId)` | Practitioner clicks Compare |
 | `ds` | `tm` | Sync call | `TemplateQueryService.getVersionChain(templateId, fromVersion)` | `ds` needs `location_key`s to read zip archives |
@@ -97,7 +101,7 @@ DiffSummaryService (public)
 
 Because no context crosses schema or internal boundaries, extracting a context into a separate service only requires:
 
-1. Replace in-process event bus calls with a message broker (e.g. SNS/SQS, Kafka).
+1. Replace in-process synchronous event dispatch with a message broker (e.g. SNS/SQS, Kafka) — handlers become async consumers with durable delivery, DLQs, and retries.
 2. Replace direct sync service calls with HTTP or gRPC.
 3. Split the DB schema into its own database instance.
 

@@ -27,9 +27,9 @@ Current state of all architecture decisions and open items.
 ## Deployment Model
 
 - **Modular monolith** — single deployable, single database, schema-separated by bounded context.
-- Contexts communicate via in-process event bus (async) or public service interfaces (sync).
+- Contexts communicate via events (published in-process, consumed **synchronously in-transaction**) or public service interfaces (sync).
 - No cross-schema DB joins. Cross-context references are correlation IDs only.
-- Extractable to microservices later with no business logic changes (swap event bus → message broker, sync calls → HTTP/gRPC, split DB schemas).
+- Extractable to microservices later with no business logic changes (swap in-process events → message broker with async consumption + retries, sync calls → HTTP/gRPC, split DB schemas).
 
 ---
 
@@ -51,12 +51,13 @@ Current state of all architecture decisions and open items.
 | :--- | :--- | :--- |
 | 1 | Read model lives in `em` schema | EMS owns creation, loading, and decision processing per the spec. Read model is a projection maintained by EMS event handlers. |
 | 2 | `um` schema removed | Update Tracking logic has no tables of its own — it writes into `em` via event handlers. |
-| 3 | Cumulative diff only (`current → latest`) | Practitioners care about compliance with the latest standard, not intermediate steps. One decision per accumulated span. |
+| 3 | Decisions span `current → target`, resolved one version at a time | A practitioner can accept/decline intermediate versions one by one (or jump straight to `latest`). `from_version_id` is always the current version, so each decision is an incremental span. |
 | 4 | `tenant_id` is a correlation ID | Tenant provisioning is out of scope — sourced from external auth. |
 | 5 | `em_engagement.status` is coarse lifecycle only | `ACTIVE`, `ARCHIVED`, `DELETED`. Workflow state lives in the blob and requires rehydration. |
 | 6 | No audit log table | `em_update_decision` is append-only and already captures who decided, when, what version, what summary was shown, and an optional reason. |
 | 7 | Version references use `version_id UUID` | Version strings (e.g. `"1.2.0"`) are display values only — all cross-table references use the stable UUID PK. |
 | 8 | `ds_diff_summary` keyed by `(template_id, from_version_id, to_version_id)` | Generated once, shared across all engagements on the same version gap. |
+| 9 | Events consumed **synchronously in-transaction** | In-process `@EventListener` — producer work and projection commit/roll back together, nothing is dropped. Async consumption via a message broker with durable delivery and retries is deferred until those guarantees are required. |
 
 ---
 
@@ -82,7 +83,7 @@ See [communication-patterns.md](./communication-patterns.md) for full details.
 
 | Type | Used for |
 | :--- | :--- |
-| Async event (in-process) | `TemplatePublished`, `EngagementCreated`, `UpdateDecisionRecorded` |
+| Event, sync in-tx | `TemplatePublished`, `EngagementCreated`, `UpdateDecisionRecorded` |
 | Sync call | Dashboard → `em` (read model queries, record decision), `em` → `tm` (version chain lookup), `em` → `ds` (diff summary) |
 
 ---
@@ -93,7 +94,7 @@ See [communication-patterns.md](./communication-patterns.md) for full details.
 - [ ] Define the API contract for the Dashboard (REST vs GraphQL).
 - [ ] Define how `tenant_id` is passed and validated (JWT claim? header?).
 - [ ] Decide whether `em_engagement_read_model` is a DB table or a materialized view.
-- [ ] Handle the version chain gap question in the Dashboard UI — show intermediate versions for transparency or cumulative only?
+- [x] Handle the version chain gap question in the Dashboard UI — resolved: show intermediate versions; practitioners resolve one by one, `from_version_id` = current version.
 
 ---
 

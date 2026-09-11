@@ -14,13 +14,13 @@ Three bounded contexts, each owning its schema:
 | Engagement Management *(core)* | `em` | Creates engagements, records decisions, owns the read model and decision trail. |
 | Diff & Summary | `ds` | Generates and caches human-readable diff narratives per version pair. |
 
-**The key design constraint** is that opening an engagement takes ~1 minute. The dashboard must never trigger rehydration. This is solved by `em_engagement_read_model` — a lightweight projection maintained by async event handlers, always queryable without rehydration.
+**The key design constraint** is that opening an engagement takes ~1 minute. The dashboard must never trigger rehydration. This is solved by `em_engagement_read_model` — a lightweight projection maintained by synchronous, in-transaction event handlers, always queryable without rehydration.
 
 **Update status** is derived at read time from two fields on the read model: `last_decided_version_id == latest_version_id` → `UPDATES_REVIEWED`, otherwise `PENDING_UPDATES`. No stored status column — no drift risk.
 
 **Diff summaries** are lazy and synchronous — generated on demand when a practitioner clicks "Compare", cached in `ds_diff_summary` keyed by `(template_id, from_version_id, to_version_id)` and shared across all engagements on the same version gap.
 
-**Stack:** Java 21 + Spring Boot 3, PostgreSQL (schema-separated), deployed as a single service on AWS (ECS + RDS). In-process async via Spring `ApplicationEventPublisher` with `@TransactionalEventListener` — handlers fire only after the originating transaction commits, preventing read model updates on rollback.
+**Stack:** Java 21 + Spring Boot 3, PostgreSQL (schema-separated), deployed as a single service on AWS (ECS + RDS). Events are published via Spring `ApplicationEventPublisher` with `@EventListener` — handlers run **synchronously inside the originating transaction**, so producer work (e.g. the decision row) and the read-model projection commit or roll back together. Nothing is dropped; no async window. If a message broker with durable delivery and retries is adopted later, consumption becomes async without changing the event contract.
 
 > Supporting diagrams: [context-map.md](./context-map.md) · [erd.md](./erd.md) · [business-flows.md](./business-flows.md) · [communication-patterns.md](./communication-patterns.md)
 
@@ -110,11 +110,11 @@ Gatling reports p95/p99 latency out of the box, which maps directly to the alert
 
 | Failure | Impact | Mitigation |
 | :--- | :--- | :--- |
-| `TemplatePublished` handler fails mid-fan-out | Some engagements show stale `latest_version_id` | Idempotent handler + retry via `sys_error_log`. Fan-out is a bulk update — wrap in a transaction per batch. |
+| `TemplatePublished` handler fails mid-fan-out | Handler failure rolls back the publishing transaction — no partial fan-out | Handler is idempotent. `sys_error_log` is written in a separate transaction (`REQUIRES_NEW`) for diagnosis; the operation is retried by the publisher or manually. A broker (DLQ + retry) would automate this later. Fan-out is a bulk update — wrap in a transaction per batch. |
 | `DiffSummaryService` LLM call fails | Practitioner cannot view narrative | Return raw JSON diff as fallback. Decision flow is unblocked — narrative is informational only. |
 
 **Key tradeoffs**
 
-- **In-process events vs message broker (SQS/SNS)**: `@TransactionalEventListener` is simple and atomic — handlers only fire after the originating transaction commits, so no phantom updates on rollback. The tradeoff is durability: if a handler throws, there is no built-in retry queue — `sys_error_log` fills that gap manually. A message broker would give durable delivery, DLQs, and retry out of the box, at the cost of distributed systems complexity and eventual consistency across the read model. chosen for simplicity and deployment fit. The context boundaries are clean — extractable later by swapping in-process event bus for a message broker and splitting schemas.
+- **Synchronous in-process events vs message broker (SQS/SNS)**: consuming events synchronously in-transaction (`@EventListener`) is the most reliable option without a broker — producer work and projection commit or roll back together, so events can never be dropped or half-applied. Cost: the handler runs on the request thread, so slow handlers add latency, and there is no automatic retry. A message broker would give durable delivery, DLQs, and retry out of the box, at the cost of distributed systems complexity, eventual consistency, and async failure semantics. Chosen for simplicity, atomicity, and deployment fit — **the code publishes events today; swapping the dispatch for a broker (async consumption) later requires no business logic changes.**
 - **Lazy diff generation vs pre-computation**: pre-computing on `TemplatePublished` would add latency to the publish flow and waste compute for version pairs nobody compares. Lazy + cache is the right tradeoff given infrequent publishes and shared cache across tenants.
 - **Stored read model vs live query**: live derivation would require rehydration (~1 min/engagement) — not viable at scale. The read model projection is the only practical approach given the hard constraint.
