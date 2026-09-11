@@ -44,17 +44,15 @@ public class EngagementServiceImpl implements EngagementService {
         EngagementReadModelEntity readModel = readModelRepository.findById(engagementId)
                 .orElseThrow(() -> new IllegalArgumentException("Read model not found for engagement: " + engagementId));
 
-        UUID fromVersionId = readModel.getLastDecidedVersionId() != null
-                ? readModel.getLastDecidedVersionId()
-                : readModel.getCurrentVersionId();
+        UUID fromVersionId = readModel.getCurrentVersionId();
         UUID latestVersionId = readModel.getLatestVersionId();
 
-        if (latestVersionId.equals(fromVersionId)) {
+        if (latestVersionId.equals(readModel.getLastDecidedVersionId())) {
             throw new IllegalArgumentException("No pending update for engagement: " + engagementId);
         }
-        if (!targetVersionId.equals(latestVersionId)) {
+        if (targetVersionId.equals(fromVersionId)) {
             throw new IllegalArgumentException(
-                    "Decision target " + targetVersionId + " does not match the latest version " + latestVersionId);
+                    "Decision target " + targetVersionId + " is the current version; target must be a version ahead of current");
         }
 
         UpdateDecision record = new UpdateDecision();

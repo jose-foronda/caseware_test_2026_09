@@ -118,17 +118,34 @@ class EngagementServiceImplTest {
     }
 
     @Test
-    @DisplayName("Given accumulated versions When recordDecision Then from_version is last decided, target is latest")
-    void recordDecision_usesLastDecidedAsFromVersion() {
+    @DisplayName("Given accumulated versions after a decline When recordDecision Then from_version is current (not last decided), target is latest")
+    void recordDecision_fromVersionIsCurrentNotLastDecided() {
         when(engagementRepository.findById(ENGAGEMENT_ID)).thenReturn(Optional.of(engagement()));
-        when(readModelRepository.findById(ENGAGEMENT_ID)).thenReturn(Optional.of(readModel(V1, V2, V1)));
+        UUID V3 = UUID.fromString("00000000-0000-0000-0000-000000000003");
+        when(readModelRepository.findById(ENGAGEMENT_ID)).thenReturn(Optional.of(readModel(V1, V3, V2)));
 
-        engagementService.recordDecision(ENGAGEMENT_ID, DecisionType.APPLIED, V2, "user-1", null);
+        engagementService.recordDecision(ENGAGEMENT_ID, DecisionType.APPLIED, V3, "user-1", null);
 
         ArgumentCaptor<UpdateDecision> rowCaptor = ArgumentCaptor.forClass(UpdateDecision.class);
         verify(updateDecisionRepository).save(rowCaptor.capture());
         assertThat(rowCaptor.getValue().getFromVersionId()).isEqualTo(V1);
-        assertThat(rowCaptor.getValue().getTargetVersionId()).isEqualTo(V2);
+        assertThat(rowCaptor.getValue().getTargetVersionId()).isEqualTo(V3);
+
+        verify(eventPublisher).publishEvent(org.mockito.ArgumentMatchers.<UpdateDecisionRecorded>any());
+    }
+
+    @Test
+    @DisplayName("Given span already decided but current lagging (declined) When recordDecision Then throws")
+    void recordDecision_noPendingUpdateAfterDecline_throws() {
+        when(engagementRepository.findById(ENGAGEMENT_ID)).thenReturn(Optional.of(engagement()));
+        when(readModelRepository.findById(ENGAGEMENT_ID)).thenReturn(Optional.of(readModel(V1, V2, V2)));
+
+        assertThatThrownBy(() -> engagementService.recordDecision(
+                ENGAGEMENT_ID, DecisionType.APPLIED, V2, "user-1", null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("No pending update");
+
+        verify(updateDecisionRepository, never()).save(org.mockito.ArgumentMatchers.any());
     }
 
     @Test
@@ -160,16 +177,33 @@ class EngagementServiceImplTest {
     }
 
     @Test
-    @DisplayName("Given target not equal to latest version When recordDecision Then throws")
-    void recordDecision_targetNotLatest_throws() {
+    @DisplayName("Given a target ahead of current but not the latest When recordDecision Then accepts (resolve one by one)")
+    void recordDecision_intermediateTarget_accepted() {
+        when(engagementRepository.findById(ENGAGEMENT_ID)).thenReturn(Optional.of(engagement()));
+        UUID V3 = UUID.fromString("00000000-0000-0000-0000-000000000003");
+        UUID V4 = UUID.fromString("00000000-0000-0000-0000-000000000004");
+        when(readModelRepository.findById(ENGAGEMENT_ID)).thenReturn(Optional.of(readModel(V1, V4, V1)));
+
+        engagementService.recordDecision(ENGAGEMENT_ID, DecisionType.APPLIED, V3, "user-1", null);
+
+        ArgumentCaptor<UpdateDecision> rowCaptor = ArgumentCaptor.forClass(UpdateDecision.class);
+        verify(updateDecisionRepository).save(rowCaptor.capture());
+        assertThat(rowCaptor.getValue().getFromVersionId()).isEqualTo(V1);
+        assertThat(rowCaptor.getValue().getTargetVersionId()).isEqualTo(V3);
+
+        verify(eventPublisher).publishEvent(org.mockito.ArgumentMatchers.<UpdateDecisionRecorded>any());
+    }
+
+    @Test
+    @DisplayName("Given target equal to current version When recordDecision Then throws")
+    void recordDecision_targetIsCurrent_throws() {
         when(engagementRepository.findById(ENGAGEMENT_ID)).thenReturn(Optional.of(engagement()));
         when(readModelRepository.findById(ENGAGEMENT_ID)).thenReturn(Optional.of(readModel(V1, V2, V1)));
-        UUID bogus = UUID.randomUUID();
 
         assertThatThrownBy(() -> engagementService.recordDecision(
-                ENGAGEMENT_ID, DecisionType.APPLIED, bogus, "user-1", null))
+                ENGAGEMENT_ID, DecisionType.APPLIED, V1, "user-1", null))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("does not match the latest version");
+                .hasMessageContaining("is the current version");
 
         verify(updateDecisionRepository, never()).save(org.mockito.ArgumentMatchers.any());
     }
