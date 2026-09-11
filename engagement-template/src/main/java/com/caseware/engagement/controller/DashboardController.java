@@ -40,6 +40,6 @@ public class DashboardController {
                                                @RequestBody RecordDecisionRequest request) {
         engagementService.recordDecision(engagementId, request.decision(), request.targetVersionId(),
                 request.userId(), request.reason());
-        return ResponseEntity.accepted().build();
+        return ResponseEntity.noContent().build();
     }
 }

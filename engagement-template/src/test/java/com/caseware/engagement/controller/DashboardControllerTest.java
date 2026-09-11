@@ -83,8 +83,8 @@ class DashboardControllerTest {
     }
 
     @Test
-    @DisplayName("Given valid decision When POST /engagements/{id}/decisions Then returns 202 Accepted")
-    void givenValidDecision_whenRecordDecision_thenAccepts() throws Exception {
+    @DisplayName("Given valid decision When POST /engagements/{id}/decisions Then returns 204 No Content")
+    void givenValidDecision_whenRecordDecision_thenNoContent() throws Exception {
         UUID engagementId = UUID.randomUUID();
         UUID targetVersionId = UUID.randomUUID();
         RecordDecisionRequest request =
@@ -95,7 +95,7 @@ class DashboardControllerTest {
                         .content("""
                                 {"decision":"APPLIED","targetVersionId":"%s","userId":"user-1","reason":"looks good"}
                                 """.formatted(targetVersionId)))
-                .andExpect(status().isAccepted());
+                .andExpect(status().isNoContent());
 
         verify(engagementService, times(1)).recordDecision(
                 engagementId, DecisionType.APPLIED, targetVersionId, "user-1", "looks good");

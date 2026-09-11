@@ -81,7 +81,7 @@ DashboardController GET /api/v1/dashboard/engagements?tenantId=
    - Start app: `.\gradlew.bat bootRun`
    - Manual checks:
      - GET `/api/v1/dashboard/engagements?tenantId=99999999-9999-9999-9999-999999999991` → 1 row `PENDING_UPDATES`
-     - POST `/api/v1/dashboard/engagements/11111111-1111-1111-1111-111111111111/decisions` with `{"decision":"APPLIED","targetVersionId":"00000000-0000-0000-0000-000000000002","userId":"demo-user"}` → 202; re-GET → `UPDATES_REVIEWED`
+     - POST `/api/v1/dashboard/engagements/11111111-1111-1111-1111-111111111111/decisions` with `{"decision":"APPLIED","targetVersionId":"00000000-0000-0000-0000-000000000002","userId":"demo-user"}` → 204; re-GET → `UPDATES_REVIEWED`
 2. **Anything you decide after review** (e.g., package name `com.caseware`, 202 vs 204 response, adding a global exception handler).
 
 ---
@@ -91,6 +91,6 @@ DashboardController GET /api/v1/dashboard/engagements?tenantId=
 | Item | Current choice | Alternatives |
 | :--- | :--- | :--- |
 | Package root | `com.caseware.engagement` | `com.lender.*` |
-| POST decision response | `202 Accepted` | `204 No Content` |
+| POST decision response | `204 No Content` — decision applied synchronously, nothing queued | ~~`202 Accepted`~~ (implies async queueing) |
 | Error handling | `IllegalArgumentException` (no `@RestControllerAdvice` yet) | Add advice mapping to 400/404 |
 | DB schema | `em` schema in `init.sql` (Postgres) | Flyway migration `V3` |
