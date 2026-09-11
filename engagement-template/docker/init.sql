@@ -19,7 +19,7 @@ GRANT ALL PRIVILEGES ON DATABASE decision_engine_db TO local;
 CREATE SCHEMA IF NOT EXISTS em;
 
 -- Engagement metadata + blob pointer. current_version_id is the authoritative version.
-CREATE TABLE em.em_engagement (
+CREATE TABLE em.engagement (
     engagement_id      UUID PRIMARY KEY,
     client_id          UUID NOT NULL,
     tenant_id          UUID NOT NULL,
@@ -37,7 +37,7 @@ CREATE TABLE em.em_engagement (
 -- Projection rebuilt from events. Never the source of truth.
 -- update_status is derived at read time: UPDATES_REVIEWED if
 -- last_decided_version_id = latest_version_id, else PENDING_UPDATES.
-CREATE TABLE em.em_engagement_read_model (
+CREATE TABLE em.engagement_read_model (
     engagement_id          UUID PRIMARY KEY,
     tenant_id              UUID NOT NULL,
     template_id            UUID NOT NULL,
@@ -47,10 +47,10 @@ CREATE TABLE em.em_engagement_read_model (
     fiscal_year            INTEGER NOT NULL
 );
 
-CREATE INDEX idx_em_read_model_tenant ON em.em_engagement_read_model (tenant_id);
+CREATE INDEX idx_em_read_model_tenant ON em.engagement_read_model (tenant_id);
 
 -- Append-only decision trail.
-CREATE TABLE em.em_update_decision (
+CREATE TABLE em.update_decision (
     decision_id       UUID PRIMARY KEY,
     engagement_id     UUID NOT NULL,
     template_id       UUID NOT NULL,
@@ -63,7 +63,7 @@ CREATE TABLE em.em_update_decision (
     decided_at        TIMESTAMPTZ NOT NULL
 );
 
-CREATE INDEX idx_em_update_decision_engagement ON em.em_update_decision (engagement_id);
+CREATE INDEX idx_em_update_decision_engagement ON em.update_decision (engagement_id);
 
 GRANT ALL PRIVILEGES ON SCHEMA em, public TO local;
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA em TO local;
@@ -73,7 +73,7 @@ GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA em TO local;
 -- Tenants: t-1 (pending update), t-2 (up to date)
 -- ────────────────────────────────────────────────────────────────────────────
 
-INSERT INTO em.em_engagement
+INSERT INTO em.engagement
     (engagement_id, client_id, tenant_id, template_id, current_version_id, fiscal_year, location_key, status)
 VALUES
     ('11111111-1111-1111-1111-111111111111', '22222222-2222-2222-2222-222222222221',
@@ -81,7 +81,7 @@ VALUES
     ('11111111-1111-1111-1111-111111111112', '22222222-2222-2222-2222-222222222222',
      '99999999-9999-9999-9999-999999999992', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '00000000-0000-0000-0000-000000000002', 2026, 'engagements/11111111-2.zip', 'ACTIVE');
 
-INSERT INTO em.em_engagement_read_model
+INSERT INTO em.engagement_read_model
     (engagement_id, tenant_id, template_id, current_version_id, latest_version_id, last_decided_version_id, fiscal_year)
 VALUES
     ('11111111-1111-1111-1111-111111111111', '99999999-9999-9999-9999-999999999991',
@@ -89,7 +89,7 @@ VALUES
     ('11111111-1111-1111-1111-111111111112', '99999999-9999-9999-9999-999999999992',
      'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000002', 2026);
 
-INSERT INTO em.em_update_decision
+INSERT INTO em.update_decision
     (decision_id, engagement_id, template_id, from_version_id, target_version_id, decision, decided_by, decided_at)
 VALUES
     ('33333333-3333-3333-3333-333333333333', '11111111-1111-1111-1111-111111111112',
