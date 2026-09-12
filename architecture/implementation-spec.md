@@ -18,8 +18,6 @@ demonstrating:
 3. The **in-transaction (synchronous) read-model projection** handler
 4. **Correctness logic** (decision validation + `update_status` derivation) with unit tests
 
-Legacy `com.decisionengine` code is untouched; it will be deleted by the user.
-
 ---
 
 ## What we are doing
@@ -90,7 +88,7 @@ DashboardController GET /api/v1/dashboard/engagements?tenantId=
 
 | Item | Current choice | Alternatives |
 | :--- | :--- | :--- |
-| Package root | `com.caseware.engagement` | `com.lender.*` |
+| Package root | `com.caseware.engagement` | — |
 | POST decision response | `204 No Content` — decision applied synchronously, nothing queued | ~~`202 Accepted`~~ (implies async queueing) |
 | Error handling | `IllegalArgumentException` (no `@RestControllerAdvice` yet) | Add advice mapping to 400/404 |
 | DB schema | `em` schema in `init.sql` (Postgres) | Flyway migration `V3` |
