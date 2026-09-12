@@ -35,4 +35,4 @@ This is the main deliverable. It covers the high-level architecture, implementat
 | [`architecture/domain-examples.md`](./architecture/domain-examples.md) | Concrete JSON examples for templates, versions, and engagements |
 | [`architecture/spec.md`](./architecture/spec.md) | Progress tracker, key decisions log, and open items |
 
-**The original test brief** is available as [`Senior Developer, SE - Take-Home Test.pdf`](./Senior%20Developer%2C%20SE%20-%20Take-Home%20Test.pdf).
+**The original test brief** is shared privately with the reviewer; it is not included in this repository.
