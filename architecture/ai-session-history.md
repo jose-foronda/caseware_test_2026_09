@@ -3,6 +3,8 @@
 **Tool used:** Amazon Q Developer (IDE plugin — VS Code)
 **Session purpose:** Domain understanding and architecture documentation for the Engagement Template Update Management System take-home challenge.
 
+> **⚠️ Status: incomplete.** This log is not a full transcript of the AI session. The live session history was lost partway through — the machine had to be shut down before the session could be saved or replayed, and the context could not be recovered after reboot. The exchanges below are reconstructed from what was retained of the session and from the artifacts it produced; there may be gaps in ordering or omitted turns.
+
 ---
 
 ## Session Summary
